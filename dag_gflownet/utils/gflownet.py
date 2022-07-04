@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import optax
 
 from tqdm.auto import trange
-from jax import nn, lax, random
+from jax import nn
 
 
 MASKED_VALUE = -1e5
@@ -82,7 +82,7 @@ def detailed_balance_loss(
     log_pB = -jnp.log1p(num_edges)
 
     error = (jnp.squeeze(delta_scores + log_pB - log_pF, axis=-1)
-        + log_pi_t[:, -1] - lax.stop_gradient(log_pi_tp1[:, -1]))
+        + log_pi_t[:, -1] - log_pi_tp1[:, -1])
     loss = jnp.mean(optax.huber_loss(error, delta=delta))
 
     logs = {

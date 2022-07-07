@@ -130,13 +130,8 @@ def main(args):
     )
 
     # Compute the metrics
-    log_features = get_log_features(posterior, data.columns)
     ground_truth = nx.to_numpy_array(graph, weight=None)
     wandb.run.summary.update({
-        'posterior/estimate/edge': table_from_dict(log_features.edge),
-        'posterior/estimate/path': table_from_dict(log_features.path),
-        'posterior/estimate/markov_blanket': table_from_dict(log_features.markov_blanket),
-
         'metrics/shd/mean': expected_shd(posterior, ground_truth),
         'metrics/edges/mean': expected_edges(posterior),
         'metrics/thresholds': threshold_metrics(posterior, ground_truth)
@@ -144,6 +139,7 @@ def main(args):
 
     # For small enough graphs, evaluate the full posterior
     if (args.graph in ['erdos_renyi_lingauss']) and (args.num_variables < 6):
+        log_features = get_log_features(posterior, data.columns)
         full_posterior = get_full_posterior(data, scorer, verbose=True)
         full_posterior.save(os.path.join(wandb.run.dir, 'posterior_full.npz'))
         wandb.save('posterior_full.npz', policy='now')
@@ -152,11 +148,6 @@ def main(args):
         full_path_log_features = get_path_log_features(full_posterior)
         full_markov_log_features = get_markov_blanket_log_features(full_posterior)
 
-        wandb.run.summary.update({
-            'posterior/full/edge': table_from_dict(full_edge_log_features),
-            'posterior/full/path': table_from_dict(full_path_log_features),
-            'posterior/full/markov_blanket': table_from_dict(full_markov_log_features)
-        })
         wandb.log({
             'posterior/scatter/edge': scatter_from_dicts('full', full_edge_log_features,
                 'estimate', log_features.edge, transform=np.exp, title='Edge features'),

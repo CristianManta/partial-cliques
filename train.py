@@ -4,6 +4,8 @@ import optax
 import networkx as nx
 import pickle
 import jax
+import wandb
+import os
 
 from tqdm import trange
 from numpy.random import default_rng
@@ -16,9 +18,19 @@ from dag_gflownet.utils.gflownet import posterior_estimate
 from dag_gflownet.utils.metrics import expected_shd, expected_edges, threshold_metrics
 from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 from dag_gflownet.utils import io
+from dag_gflownet.utils.wandb_utils import slurm_infos
 
 
 def main(args):
+    wandb.init(
+        project='dag-gflownet',
+        group='posterior-graphs',
+        tags=['gnn'],
+        settings=wandb.Settings(start_method='fork')
+    )
+    wandb.config.update(args)
+    wandb.run.summary.update(slurm_infos())
+
     rng = default_rng(args.seed)
     key = jax.random.PRNGKey(args.seed)
     key, subkey = jax.random.split(key)
@@ -85,6 +97,24 @@ def main(args):
                 samples = replay.sample(batch_size=args.batch_size, rng=rng)
                 params, state, logs = gflownet.step(params, state, samples)
 
+                train_steps = iteration - args.prefill
+                if (train_steps + 1) % (args.log_every * 10) == 0:
+                    wandb.log({
+                        'replay/delta_scores': wandb.Histogram(replay.transitions['delta_scores']),
+                        'replay/scores': wandb.Histogram(replay.transitions['scores']),
+                        'replay/num_edges': wandb.Histogram(replay.transitions['num_edges']),
+                        'replay/is_exploration': np.mean(replay.transitions['is_exploration']),
+                    }, commit=False)
+                if (train_steps + 1) % args.log_every == 0:
+                    wandb.log({
+                        'step': train_steps,
+                        'loss': logs['loss'],
+                        'replay/size': len(replay),
+                        'epsilon': epsilon,
+
+                        'error/mean': jnp.abs(logs['error']).mean(),
+                        'error/max': jnp.abs(logs['error']).max(),
+                    })
                 pbar.set_postfix(loss=f"{logs['loss']:.2f}", epsilon=f"{epsilon:.2f}")
 
     # Evaluate the posterior estimate
@@ -99,29 +129,32 @@ def main(args):
 
     # Compute the metrics
     ground_truth = nx.to_numpy_array(graph, weight=None)
-    results = {
+    wandb.run.summary.update({
         'expected_shd': expected_shd(posterior, ground_truth),
         'expected_edges': expected_edges(posterior),
         **threshold_metrics(posterior, ground_truth)
-    }
+    })
 
     # Save model, data & results
-    args.output_folder.mkdir(exist_ok=True)
-    with open(args.output_folder / 'arguments.json', 'w') as f:
-        json.dump(vars(args), f, default=str)
-    data.to_csv(args.output_folder / 'data.csv')
-    with open(args.output_folder / 'graph.pkl', 'wb') as f:
+    data.to_csv(os.path.join(wandb.run.dir, 'data.csv'))
+    wandb.save('data.csv', policy='now')
+
+    with open(os.path.join(wandb.run.dir, 'graph.pkl'), 'wb') as f:
         pickle.dump(graph, f)
-    io.save(args.output_folder / 'model.npz', params=params)
-    replay.save(args.output_folder / 'replay_buffer.npz')
-    np.save(args.output_folder / 'posterior.npy', posterior)
-    with open(args.output_folder / 'results.json', 'w') as f:
-        json.dump(results, f, default=list)
+    wandb.save('graph.pkl', policy='now')
+
+    io.save(os.path.join(wandb.run.dir, 'model.npz'), params=params)
+    wandb.save('model.npz', policy='now')
+
+    replay.save(os.path.join(wandb.run.dir,  'replay_buffer.npz'))
+    wandb.save('replay_buffer.npz', policy='now')
+
+    np.save(os.path.join(wandb.run.dir, 'posterior.npy'), posterior)
+    wandb.save('posterior.npy', policy='now')
 
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
-    from pathlib import Path
     import json
 
     parser = ArgumentParser(description='DAG-GFlowNet for Strucure Learning.')
@@ -176,8 +209,8 @@ if __name__ == '__main__':
         help='Number of workers (default: %(default)s)')
     misc.add_argument('--mp_context', type=str, default='spawn',
         help='Multiprocessing context (default: %(default)s)')
-    misc.add_argument('--output_folder', type=Path, default='output',
-        help='Output folder (default: %(default)s)')
+    misc.add_argument('--log_every', type=int, default=50,
+        help='Frequency for logging (default: %(default)s)')
 
     subparsers = parser.add_subparsers(help='Type of graph', dest='graph')
 

@@ -15,10 +15,12 @@ from dag_gflownet.gflownet import DAGGFlowNet
 from dag_gflownet.utils.replay_buffer import ReplayBuffer
 from dag_gflownet.utils.factories import get_scorer
 from dag_gflownet.utils.gflownet import posterior_estimate
-from dag_gflownet.utils.metrics import expected_shd, expected_edges, threshold_metrics
+from dag_gflownet.utils.metrics import expected_shd, expected_edges, threshold_metrics, get_log_features
 from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 from dag_gflownet.utils import io
-from dag_gflownet.utils.wandb_utils import slurm_infos
+from dag_gflownet.utils.wandb_utils import slurm_infos, table_from_dict, scatter_from_dicts
+from dag_gflownet.utils.exhaustive import (get_full_posterior,
+    get_edge_log_features, get_path_log_features, get_markov_blanket_log_features)
 
 
 def main(args):
@@ -128,12 +130,41 @@ def main(args):
     )
 
     # Compute the metrics
+    log_features = get_log_features(posterior, data.columns)
     ground_truth = nx.to_numpy_array(graph, weight=None)
     wandb.run.summary.update({
-        'expected_shd': expected_shd(posterior, ground_truth),
-        'expected_edges': expected_edges(posterior),
-        **threshold_metrics(posterior, ground_truth)
+        'posterior/estimate/edge': table_from_dict(log_features.edge),
+        'posterior/estimate/path': table_from_dict(log_features.path),
+        'posterior/estimate/markov_blanket': table_from_dict(log_features.markov_blanket),
+
+        'metrics/shd/mean': expected_shd(posterior, ground_truth),
+        'metrics/edges/mean': expected_edges(posterior),
+        'metrics/thresholds': threshold_metrics(posterior, ground_truth)
     })
+
+    # For small enough graphs, evaluate the full posterior
+    if (args.graph in ['erdos_renyi_lingauss']) and (args.num_variables < 6):
+        full_posterior = get_full_posterior(data, scorer, verbose=True)
+        full_posterior.save(os.path.join(wandb.run.dir, 'posterior_full.npz'))
+        wandb.save('posterior_full.npz', policy='now')
+
+        full_edge_log_features = get_edge_log_features(full_posterior)
+        full_path_log_features = get_path_log_features(full_posterior)
+        full_markov_log_features = get_markov_blanket_log_features(full_posterior)
+
+        wandb.run.summary.update({
+            'posterior/full/edge': table_from_dict(full_edge_log_features),
+            'posterior/full/path': table_from_dict(full_path_log_features),
+            'posterior/full/markov_blanket': table_from_dict(full_markov_log_features)
+        })
+        wandb.log({
+            'posterior/scatter/edge': scatter_from_dicts('full', full_edge_log_features,
+                'estimate', log_features.edge, transform=np.exp, title='Edge features'),
+            'posterior/scatter/path': scatter_from_dicts('full', full_path_log_features,
+                'estimate', log_features.path, transform=np.exp, title='Path features'),
+            'posterior/scatter/markov_blanket': scatter_from_dicts('full', full_markov_log_features,
+                'estimate', log_features.markov_blanket, transform=np.exp, title='Markov blanket features')
+        })
 
     # Save model, data & results
     data.to_csv(os.path.join(wandb.run.dir, 'data.csv'))

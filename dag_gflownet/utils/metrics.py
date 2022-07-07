@@ -25,8 +25,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import numpy as np
+import math
+import networkx as nx
 
+from tqdm.auto import tqdm
 from sklearn import metrics
+from collections import namedtuple, defaultdict
+
+from dag_gflownet.utils.graph import adjacencies_to_networkx, get_markov_blanket_graph
 
 
 def expected_shd(posterior, ground_truth):
@@ -126,3 +132,38 @@ def threshold_metrics(posterior, ground_truth):
         'prc_auc': prc_auc,
         'ave_prec': ave_prec,
     }
+
+Features = namedtuple('Features', ['edge', 'path', 'markov_blanket'])
+
+def get_log_features(posterior, nodes, verbose=True):
+    """Compute the log-features for edges, paths & Markov blankets."""
+    features = Features(
+        edge=defaultdict(float),
+        path=defaultdict(float),
+        markov_blanket=defaultdict(float)
+    )
+    num_samples = posterior.shape[0]
+    for graph in tqdm(adjacencies_to_networkx(posterior, nodes),
+            total=num_samples, disable=(not verbose)):
+        # Get edge features
+        for edge in graph.edges:
+            features.edge[edge] += 1.
+
+        # Get path features
+        closure = nx.transitive_closure_dag(graph)
+        for edge in closure.edges:
+            features.path[edge] += 1.
+
+        # Get Markov blanket features
+        mb = get_markov_blanket_graph(graph)
+        for edge in mb.edges:
+            features.markov_blanket[edge] += 1.
+
+    return Features(
+        edge=dict((key, math.log(value) - math.log(num_samples))
+            for (key, value) in features.edge.items()),
+        path=dict((key, math.log(value) - math.log(num_samples))
+            for (key, value) in features.path.items()),
+        markov_blanket=dict((key, math.log(value) - math.log(num_samples))
+            for (key, value) in features.markov_blanket.items())
+    )

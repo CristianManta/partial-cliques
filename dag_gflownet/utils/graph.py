@@ -78,3 +78,43 @@ def sample_erdos_renyi_linear_gaussian(
 
     graph.add_cpds(*factors)
     return graph
+
+
+def _s(node1, node2):
+    return (node2, node1) if (node1 > node2) else (node1, node2)
+
+def get_markov_blanket(graph, node):
+    parents = set(graph.predecessors(node))
+    children = set(graph.successors(node))
+
+    mb_nodes = parents | children
+    for child in children:
+        mb_nodes |= set(graph.predecessors(child))
+    mb_nodes.discard(node)
+
+    return mb_nodes
+
+
+def get_markov_blanket_graph(graph):
+    """Build an undirected graph where two nodes are connected if
+    one node is in the Markov blanket of another.
+    """
+    # Make it a directed graph to control the order of nodes in each
+    # edges, to avoid mapping the same edge to 2 entries in mapping.
+    mb_graph = nx.DiGraph()
+    mb_graph.add_nodes_from(graph.nodes)
+
+    edges = set()
+    for node in graph.nodes:
+        edges |= set(_s(node, mb_node)
+            for mb_node in get_markov_blanket(graph, node))
+    mb_graph.add_edges_from(edges)
+
+    return mb_graph
+
+
+def adjacencies_to_networkx(adjacencies, nodes):
+    mapping = dict(enumerate(nodes))
+    for adjacency in adjacencies:
+        graph = nx.from_numpy_array(adjacency, create_using=nx.DiGraph)
+        yield nx.relabel_nodes(graph, mapping, copy=False)

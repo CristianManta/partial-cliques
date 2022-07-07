@@ -5,6 +5,8 @@ import optax
 from tqdm.auto import trange
 from jax import nn
 
+from dag_gflownet.utils.jraph_utils import to_graphs_tuple
+
 
 MASKED_VALUE = -1e5
 
@@ -167,6 +169,7 @@ def posterior_estimate(
     with trange(num_samples, disable=(not verbose), **kwargs) as pbar:
         while len(samples) < num_samples:
             order = observations['order']
+            observations['adjacency'] = to_graphs_tuple(observations['adjacency'])
             actions, key, _ = gflownet.act(params, key, observations, 1.)
             observations, _, dones, _ = env.step(np.asarray(actions))
 

@@ -14,6 +14,7 @@ from dag_gflownet.utils.replay_buffer import ReplayBuffer
 from dag_gflownet.utils.factories import get_scorer
 from dag_gflownet.utils.gflownet import posterior_estimate
 from dag_gflownet.utils.metrics import expected_shd, expected_edges, threshold_metrics
+from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 from dag_gflownet.utils import io
 
 
@@ -34,7 +35,8 @@ def main(args):
     # Create the replay buffer
     replay = ReplayBuffer(
         args.replay_capacity,
-        num_variables=env.num_variables
+        num_variables=env.num_variables,
+        graphs_tuple=True,
     )
 
     # Create the GFlowNet & initialize parameters
@@ -63,7 +65,9 @@ def main(args):
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
-            actions, key, logs = gflownet.act(params.online, key, observations, epsilon)
+            samples = observations.copy()
+            samples['adjacency'] = to_graphs_tuple(samples['adjacency'])
+            actions, key, logs = gflownet.act(params, key, samples, epsilon)
             next_observations, delta_scores, dones, _ = env.step(np.asarray(actions))
             indices = replay.add(
                 observations,
@@ -86,7 +90,7 @@ def main(args):
     # Evaluate the posterior estimate
     posterior, _ = posterior_estimate(
         gflownet,
-        params.online,
+        params,
         env,
         key,
         num_samples=args.num_samples_posterior,
@@ -108,7 +112,7 @@ def main(args):
     data.to_csv(args.output_folder / 'data.csv')
     with open(args.output_folder / 'graph.pkl', 'wb') as f:
         pickle.dump(graph, f)
-    io.save(args.output_folder / 'model.npz', params=params.online)
+    io.save(args.output_folder / 'model.npz', params=params)
     replay.save(args.output_folder / 'replay_buffer.npz')
     np.save(args.output_folder / 'posterior.npy', posterior)
     with open(args.output_folder / 'results.json', 'w') as f:

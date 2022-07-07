@@ -2,10 +2,13 @@ import numpy as np
 import math
 
 from numpy.random import default_rng
+from jraph import GraphsTuple
+
+from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 
 
 class ReplayBuffer:
-    def __init__(self, capacity, num_variables):
+    def __init__(self, capacity, num_variables, graphs_tuple=False):
         self.capacity = capacity
         self.num_variables = num_variables
 
@@ -25,6 +28,7 @@ class ReplayBuffer:
         self._index = 0
         self._is_full = False
         self._prev = np.full((capacity,), -1, dtype=np.int_)
+        self._graphs_tuple = graphs_tuple
 
     def add(
             self,
@@ -73,14 +77,21 @@ class ReplayBuffer:
         indices = rng.choice(len(self), size=batch_size, replace=False)
         samples = self._replay[indices]
 
+        def decode(encoded):
+            if self._graphs_tuple:
+                decoded = to_graphs_tuple(self.decode(encoded, dtype=np.int_))
+            else:
+                decoded = self.decode(encoded, dtype=np.float32)
+            return decoded
+
         # Convert structured array into dictionary
         return {
-            'adjacency': self.decode(samples['adjacency']),
+            'adjacency': decode(samples['adjacency']),
             'num_edges': samples['num_edges'],
             'actions': samples['actions'],
             'delta_scores': samples['delta_scores'],
             'mask': self.decode(samples['mask']),
-            'next_adjacency': self.decode(samples['next_adjacency']),
+            'next_adjacency': decode(samples['next_adjacency']),
             'next_mask': self.decode(samples['next_mask'])
         }
 
@@ -98,6 +109,7 @@ class ReplayBuffer:
             'index': self._index,
             'is_full': self._is_full,
             'prev': self._prev,
+            'graphs_tuple': self._graphs_tuple,
             'capacity': self.capacity,
             'num_variables': self.num_variables,
         }
@@ -117,6 +129,7 @@ class ReplayBuffer:
             replay._is_full = data['is_full']
             replay._prev = data['prev']
             replay._replay[:len(replay)] = data['replay']
+            replay._graphs_tuple = data['graphs_tuple']
         return replay
 
     def encode(self, decoded):
@@ -131,12 +144,24 @@ class ReplayBuffer:
     @property
     def dummy(self):
         shape = (self.num_variables, self.num_variables)
+        if self._graphs_tuple:
+            adjacency = GraphsTuple(
+                nodes=np.arange(self.num_variables),
+                edges=None,
+                senders=None,
+                receivers=None,
+                globals=None,
+                n_node=np.full((1,), self.num_variables, dtype=np.int_),
+                n_edge=np.zeros((1,), dtype=np.int_),
+            )
+        else:
+            adjacency = np.zeros(shape, dtype=np.float32)
         return {
-            'adjacency': np.zeros(shape, dtype=np.float32),
+            'adjacency': adjacency,
             'num_edges': np.zeros((1,), dtype=np.int_),
             'actions': np.zeros((1,), dtype=np.int_),
             'delta_scores': np.zeros((1,), dtype=np.float_),
             'mask': np.zeros(shape, dtype=np.float32),
-            'next_adjacency': np.zeros(shape, dtype=np.float32),
+            'next_adjacency': adjacency,
             'next_mask': np.zeros(shape, dtype=np.float32)
         }

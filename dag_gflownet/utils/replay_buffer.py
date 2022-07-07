@@ -143,16 +143,16 @@ class ReplayBuffer:
 
     @property
     def dummy(self):
-        shape = (self.num_variables, self.num_variables)
+        shape = (1, self.num_variables, self.num_variables)
         if self._graphs_tuple:
             adjacency = GraphsTuple(
                 nodes=np.arange(self.num_variables),
-                edges=None,
-                senders=None,
-                receivers=None,
+                edges=np.zeros((1,), dtype=np.int_),
+                senders=np.zeros((1,), dtype=np.int_),
+                receivers=np.zeros((1,), dtype=np.int_),
                 globals=None,
                 n_node=np.full((1,), self.num_variables, dtype=np.int_),
-                n_edge=np.zeros((1,), dtype=np.int_),
+                n_edge=np.ones((1,), dtype=np.int_),
             )
         else:
             adjacency = np.zeros(shape, dtype=np.float32)

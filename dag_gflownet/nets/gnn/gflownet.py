@@ -41,6 +41,7 @@ def gflownet(graphs, masks):
     features = graph_net(graphs)
 
     node_features = features.nodes[:batch_size * num_variables]
+    global_features = features.globals[:batch_size]
 
     senders = hk.nets.MLP([128, 128], name='senders')(node_features)
     senders = senders.reshape(batch_size, num_variables, -1)
@@ -49,6 +50,7 @@ def gflownet(graphs, masks):
     receivers = receivers.reshape(batch_size, num_variables, -1)
 
     logits = lax.batch_matmul(senders, receivers.transpose(0, 2, 1))
-    stop = hk.nets.MLP([128, 1], name='stop')(features.globals)
+    logits = logits.reshape(batch_size, -1)
+    stop = hk.nets.MLP([128, 1], name='stop')(global_features)
 
     return log_policy(logits, stop, masks)

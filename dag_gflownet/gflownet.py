@@ -57,7 +57,7 @@ class DAGGFlowNet:
     def act(self, params, key, observations, epsilon):
         masks = observations['mask'].astype(jnp.float32)
         adjacencies = observations['adjacency']
-        batch_size = adjacencies.shape[0]
+        batch_size = masks.shape[0]
         key, subkey1, subkey2 = random.split(key, 3)
 
         # Get the GFlowNet policy

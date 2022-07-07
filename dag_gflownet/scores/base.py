@@ -1,11 +1,14 @@
 import sys
+import networkx as nx
 
+from functools import lru_cache
 from collections import namedtuple
 from abc import ABC, abstractmethod
+from pgmpy.estimators import StructureScore
 
 LocalScore = namedtuple('LocalScore', ['key', 'score', 'prior'])
 
-class BaseScore(ABC):
+class BaseScore(ABC, StructureScore):
     """Base class for the scorer.
     
     Parameters
@@ -20,8 +23,11 @@ class BaseScore(ABC):
         self.data = data
         self.prior = prior
         self.column_names = list(data.columns)
+        self.column_names_to_idx = dict((name, idx)
+            for (idx, name) in enumerate(self.column_names))
         self.num_variables = len(self.column_names)
         self.prior.num_variables = self.num_variables
+        self._cache_local_scores = None
 
     def __call__(self, index, in_queue, out_queue, error_queue):
         try:
@@ -45,6 +51,21 @@ class BaseScore(ABC):
     @abstractmethod
     def get_local_scores(self, target, indices, indices_after=None):
         pass
+
+    @property
+    def cache_local_scores(self):
+        if self._cache_local_scores is None:
+            self._cache_local_scores = lru_cache()(self.get_local_scores)
+        return self._cache_local_scores
+
+    def score(self, graph):
+        graph = nx.relabel_nodes(graph, self.column_names_to_idx)
+        score = 0
+        for node in graph.nodes():
+            _, local_score = self.cache_local_scores(
+                node, tuple(graph.predecessors(node)))
+            score += local_score.score + local_score.prior
+        return score
 
 
 class BasePrior(ABC):

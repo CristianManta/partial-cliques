@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import haiku as hk
 import jraph
 
-from jax import lax
+from jax import lax, nn
 
 from dag_gflownet.utils.gflownet import log_policy
 
@@ -53,4 +53,10 @@ def gflownet(graphs, masks):
     logits = logits.reshape(batch_size, -1)
     stop = hk.nets.MLP([128, 1], name='stop')(global_features)
 
-    return log_policy(logits, stop, masks)
+    temperature = hk.Sequential([
+        hk.Linear(128), nn.relu,
+        hk.Linear(1, w_init=hk.initializers.Constant(0.)),
+        nn.softplus
+    ], name='temperature')(global_features)
+
+    return log_policy(logits / temperature, stop, masks)

@@ -51,11 +51,20 @@ def gflownet(graphs, masks):
     node_features = features.nodes[:batch_size * num_variables]
     global_features = features.globals[:batch_size]
 
-    senders = hk.nets.MLP([128, 128], name='senders')(node_features)
-    senders = senders.reshape(batch_size, num_variables, -1)
+    # Reshape the node features, and project into keys, queries & values
+    node_features = node_features.reshape(batch_size, num_variables, -1)
+    node_features = hk.Linear(128 * 3, name='projection')(node_features)
+    queries, keys, values = jnp.split(node_features, 3, axis=2)
 
+    # Self-attention layer
+    node_features = hk.MultiHeadAttention(
+        num_heads=4,
+        key_size=32,
+        w_init_scale=2.
+    )(queries, keys, values)
+
+    senders = hk.nets.MLP([128, 128], name='senders')(node_features)
     receivers = hk.nets.MLP([128, 128], name='receivers')(node_features)
-    receivers = receivers.reshape(batch_size, num_variables, -1)
 
     logits = lax.batch_matmul(senders, receivers.transpose(0, 2, 1))
     logits = logits.reshape(batch_size, -1)

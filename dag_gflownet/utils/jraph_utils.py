@@ -1,4 +1,5 @@
 import numpy as np
+import jax.numpy as jnp
 import jraph
 
 
@@ -48,3 +49,11 @@ def pad_graph_to_nearest_power_of_two(graphs_tuple):
     pad_graphs_to = graphs_tuple.n_node.shape[0] + 1
     return jraph.pad_with_graphs(
         graphs_tuple, pad_nodes_to, pad_edges_to, pad_graphs_to)
+
+
+def get_node_offsets(graphs):
+    n_node = jnp.zeros_like(graphs.n_node)
+    n_node = n_node.at[1:].set(graphs.n_node[:-1])
+    offsets = jnp.cumsum(n_node)
+    return jnp.repeat(offsets, graphs.n_edge, axis=0,
+        total_repeat_length=graphs.edges.shape[0])

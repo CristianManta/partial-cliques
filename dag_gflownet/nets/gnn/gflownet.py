@@ -6,16 +6,22 @@ import math
 from jax import lax, nn
 
 from dag_gflownet.utils.gflownet import log_policy
+from dag_gflownet.utils.jraph_utils import get_node_offsets
 
 
 def gflownet(graphs, masks):
     batch_size, num_variables = masks.shape[:2]
+
+    # Get offsets for senders & receivers
+    offsets = get_node_offsets(graphs)
 
     # Embedding of the nodes & edges
     node_embeddings = hk.Embed(num_variables, embed_dim=128)
     edge_embeddings = hk.Embed(2, embed_dim=128)
 
     graphs = graphs._replace(
+        senders=graphs.senders + offsets,
+        receivers=graphs.receivers + offsets,
         nodes=node_embeddings(graphs.nodes),
         edges=edge_embeddings(graphs.edges),
         globals=jnp.zeros((graphs.n_node.shape[0], 1)),

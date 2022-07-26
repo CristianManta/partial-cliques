@@ -7,16 +7,14 @@ def to_graphs_tuple(adjacencies, pad=True):
     num_graphs, num_variables = adjacencies.shape[:2]
     n_node = np.full((num_graphs,), num_variables, dtype=np.int_)
 
-    # Symmetrize the adjacency matrices (remove edge directions)
-    undirected = adjacencies + adjacencies.transpose(0, 2, 1)
-    counts, senders, receivers = np.nonzero(undirected)
+    counts, senders, receivers = np.nonzero(adjacencies)
     n_edge = np.zeros((num_graphs,), dtype=np.int_)
     np.add.at(n_edge, counts, 1)
 
     # Node features: node indices
     # Edge features: binary features "is the edge in the original DAG?"
     nodes = np.tile(np.arange(num_variables), num_graphs)
-    edges = adjacencies[counts, senders, receivers]
+    edges = np.ones_like(senders)
 
     graphs_tuple =  jraph.GraphsTuple(
         nodes=nodes,

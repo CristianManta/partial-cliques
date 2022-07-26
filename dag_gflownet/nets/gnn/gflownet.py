@@ -17,13 +17,14 @@ def gflownet(graphs, masks):
 
     # Embedding of the nodes & edges
     node_embeddings = hk.Embed(num_variables, embed_dim=128)
-    edge_embeddings = hk.Embed(2, embed_dim=128)
+    edge_embedding = hk.get_parameter('edge_embed', shape=(1, 128),
+        init=hk.initializers.TruncatedNormal())
 
     graphs = graphs._replace(
         senders=graphs.senders + offsets,
         receivers=graphs.receivers + offsets,
         nodes=node_embeddings(graphs.nodes),
-        edges=edge_embeddings(graphs.edges),
+        edges=jnp.repeat(edge_embedding, graphs.edges.shape[0], axis=0),
         globals=jnp.zeros((graphs.n_node.shape[0], 1)),
     )
 

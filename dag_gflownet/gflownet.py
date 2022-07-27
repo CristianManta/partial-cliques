@@ -40,9 +40,9 @@ class DAGGFlowNet:
 
     def loss(self, params, samples):
         log_pi_t = self.model.apply(
-            params, samples['adjacency'], samples['mask'])
+            params, samples['graph'], samples['mask'])
         log_pi_tp1 = self.model.apply(
-            params, samples['next_adjacency'], samples['next_mask'])
+            params, samples['next_graph'], samples['next_mask'])
 
         return detailed_balance_loss(
             log_pi_t,
@@ -56,12 +56,12 @@ class DAGGFlowNet:
     @partial(jit, static_argnums=(0,))
     def act(self, params, key, observations, epsilon):
         masks = observations['mask'].astype(jnp.float32)
-        adjacencies = observations['adjacency']
+        graphs = observations['graph']
         batch_size = masks.shape[0]
         key, subkey1, subkey2 = random.split(key, 3)
 
         # Get the GFlowNet policy
-        log_pi = self.model.apply(params, adjacencies, masks)
+        log_pi = self.model.apply(params, graphs, masks)
 
         # Get uniform policy
         log_uniform = uniform_log_policy(masks)
@@ -89,10 +89,10 @@ class DAGGFlowNet:
 
         return (params, state, logs)
 
-    def init(self, key, optimizer, adjacency, mask):
+    def init(self, key, optimizer, graph, mask):
         # Set the optimizer
         self._optimizer = optax.chain(optimizer, optax.zero_nans())
-        params = self.model.init(key, adjacency, mask)
+        params = self.model.init(key, graph, mask)
         state = self.optimizer.init(params)
         return (params, state)
 

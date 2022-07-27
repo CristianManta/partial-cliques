@@ -62,7 +62,7 @@ def main(args):
     params, state = gflownet.init(
         subkey,
         optimizer,
-        replay.dummy['adjacency'],
+        replay.dummy['graph'],
         replay.dummy['mask']
     )
     exploration_schedule = jax.jit(optax.linear_schedule(
@@ -79,9 +79,8 @@ def main(args):
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
-            samples = observations.copy()
-            samples['adjacency'] = to_graphs_tuple(samples['adjacency'])
-            actions, key, logs = gflownet.act(params, key, samples, epsilon)
+            observations['graph'] = to_graphs_tuple(samples['adjacency'])
+            actions, key, logs = gflownet.act(params, key, observations, epsilon)
             next_observations, delta_scores, dones, _ = env.step(np.asarray(actions))
             indices = replay.add(
                 observations,

@@ -8,7 +8,7 @@ from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 
 
 class ReplayBuffer:
-    def __init__(self, capacity, num_variables, graphs_tuple=False):
+    def __init__(self, capacity, num_variables):
         self.capacity = capacity
         self.num_variables = num_variables
 
@@ -28,7 +28,6 @@ class ReplayBuffer:
         self._index = 0
         self._is_full = False
         self._prev = np.full((capacity,), -1, dtype=np.int_)
-        self._graphs_tuple = graphs_tuple
 
     def add(
             self,
@@ -77,21 +76,19 @@ class ReplayBuffer:
         indices = rng.choice(len(self), size=batch_size, replace=False)
         samples = self._replay[indices]
 
-        def decode(encoded):
-            if self._graphs_tuple:
-                decoded = to_graphs_tuple(self.decode(encoded, dtype=np.int_))
-            else:
-                decoded = self.decode(encoded, dtype=np.float32)
-            return decoded
+        adjacency = self.decode(samples['adjacency'], dtype=np.int_)
+        next_adjacency = self.decode(samples['next_adjacency'], dtype=np.int_)
 
         # Convert structured array into dictionary
         return {
-            'adjacency': decode(samples['adjacency']),
+            'adjacency': adjacency.astype(np.float32),
+            'graph': to_graphs_tuple(adjacency),
             'num_edges': samples['num_edges'],
             'actions': samples['actions'],
             'delta_scores': samples['delta_scores'],
             'mask': self.decode(samples['mask']),
-            'next_adjacency': decode(samples['next_adjacency']),
+            'next_adjacency': next_adjacency.astype(np.float32),
+            'next_graph': to_graphs_tuple(next_adjacency),
             'next_mask': self.decode(samples['next_mask'])
         }
 
@@ -104,12 +101,11 @@ class ReplayBuffer:
 
     def save(self, filename):
         data = {
-            'version': 2,
+            'version': 3,
             'replay': self.transitions,
             'index': self._index,
             'is_full': self._is_full,
             'prev': self._prev,
-            'graphs_tuple': self._graphs_tuple,
             'capacity': self.capacity,
             'num_variables': self.num_variables,
         }
@@ -119,7 +115,7 @@ class ReplayBuffer:
     def load(cls, filename):
         with open(filename, 'rb') as f:
             data = np.load(f)
-            if data['version'] != 2:
+            if data['version'] != 3:
                 raise IOError(f'Unknown version: {data["version"]}')
             replay = cls(
                 capacity=data['capacity'],
@@ -129,7 +125,6 @@ class ReplayBuffer:
             replay._is_full = data['is_full']
             replay._prev = data['prev']
             replay._replay[:len(replay)] = data['replay']
-            replay._graphs_tuple = data['graphs_tuple']
         return replay
 
     def encode(self, decoded):
@@ -144,24 +139,24 @@ class ReplayBuffer:
     @property
     def dummy(self):
         shape = (1, self.num_variables, self.num_variables)
-        if self._graphs_tuple:
-            adjacency = GraphsTuple(
-                nodes=np.arange(self.num_variables),
-                edges=np.zeros((1,), dtype=np.int_),
-                senders=np.zeros((1,), dtype=np.int_),
-                receivers=np.zeros((1,), dtype=np.int_),
-                globals=None,
-                n_node=np.full((1,), self.num_variables, dtype=np.int_),
-                n_edge=np.ones((1,), dtype=np.int_),
-            )
-        else:
-            adjacency = np.zeros(shape, dtype=np.float32)
+        graph = GraphsTuple(
+            nodes=np.arange(self.num_variables),
+            edges=np.zeros((1,), dtype=np.int_),
+            senders=np.zeros((1,), dtype=np.int_),
+            receivers=np.zeros((1,), dtype=np.int_),
+            globals=None,
+            n_node=np.full((1,), self.num_variables, dtype=np.int_),
+            n_edge=np.ones((1,), dtype=np.int_),
+        )
+        adjacency = np.zeros(shape, dtype=np.float32)
         return {
             'adjacency': adjacency,
+            'graph': graph,
             'num_edges': np.zeros((1,), dtype=np.int_),
             'actions': np.zeros((1,), dtype=np.int_),
             'delta_scores': np.zeros((1,), dtype=np.float_),
             'mask': np.zeros(shape, dtype=np.float32),
             'next_adjacency': adjacency,
+            'next_graph': graph,
             'next_mask': np.zeros(shape, dtype=np.float32)
         }

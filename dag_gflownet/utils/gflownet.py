@@ -169,7 +169,7 @@ def posterior_estimate(
     with trange(num_samples, disable=(not verbose), **kwargs) as pbar:
         while len(samples) < num_samples:
             order = observations['order']
-            observations['adjacency'] = to_graphs_tuple(observations['adjacency'])
+            observations['graph'] = to_graphs_tuple(observations['adjacency'])
             actions, key, _ = gflownet.act(params, key, observations, 1.)
             observations, _, dones, _ = env.step(np.asarray(actions))
 

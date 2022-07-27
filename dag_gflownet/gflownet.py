@@ -24,17 +24,13 @@ class DAGGFlowNet:
     delta : float (default: 1.)
         The value of delta for the Huber loss used in the detailed balance
         loss (in place of the L2 loss) to avoid gradient explosion.
-
-    update_target_every : int (default: 1000)
-        The update period for the parameters of the target network.
     """
-    def __init__(self, model=None, delta=1., update_target_every=1000):
+    def __init__(self, model=None, delta=1.):
         if model is None:
             model = gflownet
 
         self.model = hk.without_apply_rng(hk.transform(model))
         self.delta = delta
-        self.update_target_every = update_target_every
 
         self._optimizer = None
 

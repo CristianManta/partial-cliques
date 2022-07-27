@@ -54,10 +54,7 @@ def main(args):
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(
-        delta=args.delta,
-        update_target_every=args.update_target_every
-    )
+    gflownet = DAGGFlowNet(delta=args.delta)
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
         subkey,
@@ -215,15 +212,11 @@ if __name__ == '__main__':
     exploration = parser.add_argument_group('Exploration')
     exploration.add_argument('--min_exploration', type=float, default=0.1,
         help='Minimum value of epsilon-exploration (default: %(default)s)')
-    exploration.add_argument('--update_epsilon_every', type=int, default=10,
-        help='Frequency of update for epsilon (default: %(default)s)')
     
     # Miscellaneous
     misc = parser.add_argument_group('Miscellaneous')
     misc.add_argument('--num_samples_posterior', type=int, default=1000,
         help='Number of samples for the posterior estimate (default: %(default)s)')
-    misc.add_argument('--update_target_every', type=int, default=1000,
-        help='Frequency of update for the target network (default: %(default)s)')
     misc.add_argument('--seed', type=int, default=0,
         help='Random seed (default: %(default)s)')
     misc.add_argument('--num_workers', type=int, default=4,

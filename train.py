@@ -76,7 +76,7 @@ def main(args):
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
-            observations['graph'] = to_graphs_tuple(samples['adjacency'])
+            observations['graph'] = to_graphs_tuple(observations['adjacency'])
             actions, key, logs = gflownet.act(params, key, observations, epsilon)
             next_observations, delta_scores, dones, _ = env.step(np.asarray(actions))
             indices = replay.add(

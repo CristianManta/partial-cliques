@@ -50,7 +50,6 @@ def main(args):
     replay = ReplayBuffer(
         args.replay_capacity,
         num_variables=env.num_variables,
-        graphs_tuple=True,
     )
 
     # Create the GFlowNet & initialize parameters

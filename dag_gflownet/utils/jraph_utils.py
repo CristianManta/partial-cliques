@@ -7,7 +7,7 @@ def to_graphs_tuple(adjacencies, pad=True):
     n_node = np.full((num_graphs,), num_variables, dtype=np.int_)
 
     counts, senders, receivers = np.nonzero(adjacencies)
-    n_edge = np.bincount(counts)
+    n_edge = np.bincount(counts, minlength=num_graphs)
 
     # Node features: node indices
     nodes = np.tile(np.arange(num_variables), num_graphs)

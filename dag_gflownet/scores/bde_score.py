@@ -72,19 +72,25 @@ class BDeScore(BaseScore):
                                 .size()
                                 .unstack(parents))
 
-        if not isinstance(state_count_data.columns, pd.MultiIndex):
-            state_count_data.columns = pd.MultiIndex.from_arrays(
-                [state_count_data.columns]
-            )
+        if isinstance(state_count_data, pd.DataFrame):
+            if not isinstance(state_count_data.columns, pd.MultiIndex):
+                state_count_data.columns = pd.MultiIndex.from_arrays(
+                    [state_count_data.columns]
+                )
 
-        parent_states = [self.state_names[parent] for parent in parents]
-        columns_index = pd.MultiIndex.from_product(parent_states, names=parents)
+            parent_states = [self.state_names[parent] for parent in parents]
+            columns_index = pd.MultiIndex.from_product(parent_states, names=parents)
+
+            counts_after = (state_count_data
+                .reindex(index=self.state_names[variable], columns=columns_index)
+                .fillna(0)
+            )
+        else:
+            counts_after = state_count_data.to_frame()
 
         state_counts_after = StateCounts(
             key=(target, tuple(all_indices)),
-            counts=(state_count_data
-                .reindex(index=self.state_names[variable], columns=columns_index)
-                .fillna(0))
+            counts=counts_after
         )
 
         if indices_after is not None:

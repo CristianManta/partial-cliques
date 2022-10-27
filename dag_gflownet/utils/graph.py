@@ -7,6 +7,7 @@ from itertools import chain, product, islice, count
 from numpy.random import default_rng
 from pgmpy import models
 from pgmpy.factors.continuous import LinearGaussianCPD
+from pgmpy.factors.discrete import TabularCPD
 
 
 def sample_erdos_renyi_graph(
@@ -80,6 +81,63 @@ def sample_erdos_renyi_linear_gaussian(
     return graph
 
 
+def sample_erdos_renyi_dirichlet_multinomial(
+        num_variables,
+        cardinalities,
+        p=None,
+        num_edges=None,
+        nodes=None,
+        alpha=1.,
+        rng=default_rng()
+    ):
+    # Create graph structure
+    graph = sample_erdos_renyi_graph(
+        num_variables,
+        p=p,
+        num_edges=num_edges,
+        nodes=nodes,
+        create_using=models.BayesianNetwork,
+        rng=rng
+    )
+    nodelist = list(graph.nodes)
+
+    if isinstance(cardinalities, int):
+        cardinalities = [cardinalities for _ in range(num_variables)]
+    
+    if len(cardinalities) != num_variables:
+        raise ValueError(f'The length of cardinalities ({cardinalities}) must '
+            f'be equal to the number of variables ({num_variables}).')
+
+    # Create the model parameters
+    factors = []
+    for idx, node in enumerate(nodelist):
+        parents = list(graph.predecessors(node))
+        parent_indices = [
+            index for (index, parent) in enumerate(nodelist)
+            if parent in parents
+        ]
+        parent_cards = [cardinalities[index] for index in parent_indices]
+        num_columns = max(1, int(np.prod(parent_cards)))
+
+        # Sample random parameters (from Dirichlet distribution)
+        alpha_vector = np.full((cardinalities[idx],), alpha)
+        thetas = rng.dirichlet(alpha_vector, size=(num_columns,))
+
+        # Create factor
+        factor = TabularCPD(
+            node,
+            cardinalities[idx],
+            thetas.T,
+            parents,
+            parent_cards    
+        )
+        factor.normalize()
+        factors.append(factor)
+
+    graph.add_cpds(*factors)
+    return graph
+
+
 def _s(node1, node2):
     return (node2, node1) if (node1 > node2) else (node1, node2)
 
@@ -118,3 +176,18 @@ def adjacencies_to_networkx(adjacencies, nodes):
     for adjacency in adjacencies:
         graph = nx.from_numpy_array(adjacency, create_using=nx.DiGraph)
         yield nx.relabel_nodes(graph, mapping, copy=False)
+
+
+if __name__ == '__main__':
+    from dag_gflownet.utils.sampling import sample_from_discrete
+
+    nodes = ['diff', 'intel', 'grade']
+    cardinalities = [2, 3, 3]
+    rng = default_rng(0)
+
+    graph = sample_erdos_renyi_dirichlet_multinomial(
+        3, cardinalities, num_edges=2, nodes=nodes, rng=rng)
+
+    data = sample_from_discrete(graph, 100, rng=rng)
+
+    print(data.head(10))

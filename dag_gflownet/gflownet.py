@@ -35,45 +35,49 @@ class DAGGFlowNet:
         self._optimizer = None
 
     def loss(self, params, samples):
-        log_pi_t = self.model.apply(
-            params, samples['graph'], samples['mask'])
-        log_pi_tp1 = self.model.apply(
-            params, samples['next_graph'], samples['next_mask'])
+        # log_pi_t = self.model.apply(
+        #     params, samples['graph'], samples['mask'])
+        # log_pi_tp1 = self.model.apply(
+        #     params, samples['next_graph'], samples['next_mask'])
 
-        return detailed_balance_loss(
-            log_pi_t,
-            log_pi_tp1,
-            samples['actions'],
-            samples['delta_scores'],
-            samples['num_edges'],
-            delta=self.delta
-        )
+        # return detailed_balance_loss(
+        #     log_pi_t,
+        #     log_pi_tp1,
+        #     samples['actions'],
+        #     samples['delta_scores'],
+        #     samples['num_edges'],
+        #     delta=self.delta
+        # )
+        # TODO:
+        raise NotImplementedError
 
     @partial(jit, static_argnums=(0,))
     def act(self, params, key, observations, epsilon):
-        masks = observations['mask'].astype(jnp.float32)
-        graphs = observations['graph']
-        batch_size = masks.shape[0]
-        key, subkey1, subkey2 = random.split(key, 3)
+        # masks = observations['mask'].astype(jnp.float32)
+        # graphs = observations['graph']
+        # batch_size = masks.shape[0]
+        # key, subkey1, subkey2 = random.split(key, 3)
 
-        # Get the GFlowNet policy
-        log_pi = self.model.apply(params, graphs, masks)
+        # # Get the GFlowNet policy
+        # log_pi = self.model.apply(params, graphs, masks)
 
-        # Get uniform policy
-        log_uniform = uniform_log_policy(masks)
+        # # Get uniform policy
+        # log_uniform = uniform_log_policy(masks)
 
-        # Mixture of GFlowNet policy and uniform policy
-        is_exploration = random.bernoulli(
-            subkey1, p=1. - epsilon, shape=(batch_size, 1))
-        log_pi = jnp.where(is_exploration, log_uniform, log_pi)
+        # # Mixture of GFlowNet policy and uniform policy
+        # is_exploration = random.bernoulli(
+        #     subkey1, p=1. - epsilon, shape=(batch_size, 1))
+        # log_pi = jnp.where(is_exploration, log_uniform, log_pi)
 
-        # Sample actions
-        actions = batch_random_choice(subkey2, jnp.exp(log_pi), masks)
+        # # Sample actions
+        # actions = batch_random_choice(subkey2, jnp.exp(log_pi), masks)
 
-        logs = {
-            'is_exploration': is_exploration.astype(jnp.int32),
-        }
-        return (actions, key, logs)
+        # logs = {
+        #     'is_exploration': is_exploration.astype(jnp.int32),
+        # }
+        # return (actions, key, logs)
+        # TODO:
+        raise NotImplementedError
 
     @partial(jit, static_argnums=(0,))
     def step(self, params, state, samples):
@@ -85,10 +89,10 @@ class DAGGFlowNet:
 
         return (params, state, logs)
 
-    def init(self, key, optimizer, graph, mask):
+    def init(self, key, optimizer, graph, mask): # TODO: Change graph and mask to other
         # Set the optimizer
         self._optimizer = optax.chain(optimizer, optax.zero_nans())
-        params = self.model.init(key, graph, mask)
+        params = self.model.init(key, graph, mask) # TODO: Change input of model
         state = self.optimizer.init(params)
         return (params, state)
 

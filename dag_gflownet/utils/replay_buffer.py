@@ -8,6 +8,7 @@ from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 
 
 class ReplayBuffer:
+    # TODO: Change this class depending on whether we want to store whole transitions in the replay buffer
     def __init__(self, capacity, num_variables):
         self.capacity = capacity
         self.num_variables = num_variables

@@ -42,6 +42,7 @@ def main(args):
     # Generate the ground truth data 
     #TODO: 
     latent_data, obs_data, graph = (None, None, None)
+    
     # Create the environment
     env = GFlowNetDAGEnv(
         num_envs=args.num_envs,

@@ -44,6 +44,7 @@ def main(args):
     latent_data, obs_data, graph = (None, None, None)
     
     # Create the environment
+    # TODO:
     env = GFlowNetDAGEnv(
         num_envs=args.num_envs,
         num_variables=args.num_variables
@@ -58,7 +59,7 @@ def main(args):
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(delta=args.delta)
+    gflownet = DAGGFlowNet(delta=args.delta) # TODO: 
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
         subkey,

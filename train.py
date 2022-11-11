@@ -24,32 +24,36 @@ from dag_gflownet.utils.exhaustive import (get_full_posterior,
 
 
 def main(args):
-    wandb.init(
-        project='dag-gflownet',
-        group='posterior-graphs',
-        tags=['gnn'],
-        settings=wandb.Settings(start_method='fork')
-    )
-    wandb.config.update(args)
-    wandb.run.summary.update(slurm_infos())
+    if not args.off_wandb:
+        wandb.init(
+            project='partial-cliques',
+            group='energy-based',
+            tags=['gnn'],
+            settings=wandb.Settings(start_method='fork')
+        )
+        wandb.config.update(args)
+        wandb.run.summary.update(slurm_infos())
 
     rng = default_rng(args.seed)
     key = jax.random.PRNGKey(args.seed)
     key, subkey = jax.random.split(key)
 
+
+    # Generate the ground truth data 
+    #TODO: 
+    latent_data, obs_data, graph = (None, None, None)
     # Create the environment
-    scorer, data, graph = get_scorer(args, rng=rng)
     env = GFlowNetDAGEnv(
         num_envs=args.num_envs,
-        scorer=scorer,
-        num_workers=args.num_workers,
-        context=args.mp_context
+        num_variables=args.num_variables
     )
 
     # Create the replay buffer
-    replay = ReplayBuffer(
+    replay = ReplayBuffer( # TODO: Modify this so that we store most likely 
+                          # complete trajectories (since the reward is not 
+                          # received at every transition)
         args.replay_capacity,
-        num_variables=env.num_variables,
+        num_variables=args.num_variables,
     )
 
     # Create the GFlowNet & initialize parameters
@@ -58,7 +62,8 @@ def main(args):
     params, state = gflownet.init(
         subkey,
         optimizer,
-        replay.dummy['graph'],
+        replay.dummy['graph'], # TODO: will need to change this depending on the 
+        # inputs type that we decide to use for the function approximator
         replay.dummy['mask']
     )
     exploration_schedule = jax.jit(optax.linear_schedule(
@@ -75,15 +80,15 @@ def main(args):
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
-            observations['graph'] = to_graphs_tuple(observations['adjacency'])
+            # observations['graph'] = to_graphs_tuple(observations['adjacency'])
             actions, key, logs = gflownet.act(params, key, observations, epsilon)
-            next_observations, delta_scores, dones, _ = env.step(np.asarray(actions))
-            indices = replay.add(
+            next_observations, dones = env.step(np.asarray(actions))
+            indices = replay.add( # TODO: Maybe only need to store an entire 
+                                 # trajectory at the time
                 observations,
                 actions,
                 logs['is_exploration'],
                 next_observations,
-                delta_scores,
                 dones,
                 prev_indices=indices
             )
@@ -95,79 +100,79 @@ def main(args):
                 params, state, logs = gflownet.step(params, state, samples)
 
                 train_steps = iteration - args.prefill
-                if (train_steps + 1) % (args.log_every * 10) == 0:
-                    wandb.log({
-                        'replay/delta_scores': wandb.Histogram(replay.transitions['delta_scores']),
-                        'replay/scores': wandb.Histogram(replay.transitions['scores']),
-                        'replay/num_edges': wandb.Histogram(replay.transitions['num_edges']),
-                        'replay/is_exploration': np.mean(replay.transitions['is_exploration']),
-                    }, commit=False)
-                if (train_steps + 1) % args.log_every == 0:
-                    wandb.log({
-                        'step': train_steps,
-                        'loss': logs['loss'],
-                        'replay/size': len(replay),
-                        'epsilon': epsilon,
+                if not args.off_wandb:
+                    if (train_steps + 1) % (args.log_every * 10) == 0:
+                        wandb.log({
+                            'replay/num_edges': wandb.Histogram(replay.transitions['num_edges']), # TODO: add more appropriate logs
+                            'replay/is_exploration': np.mean(replay.transitions['is_exploration']),
+                        }, commit=False)
+                    if (train_steps + 1) % args.log_every == 0:
+                        wandb.log({
+                            'step': train_steps,
+                            'loss': logs['loss'],
+                            'replay/size': len(replay),
+                            'epsilon': epsilon,
 
-                        'error/mean': jnp.abs(logs['error']).mean(),
-                        'error/max': jnp.abs(logs['error']).max(),
-                    })
+                            'error/mean': jnp.abs(logs['error']).mean(),
+                            'error/max': jnp.abs(logs['error']).max(),
+                        })
                 pbar.set_postfix(loss=f"{logs['loss']:.2f}", epsilon=f"{epsilon:.2f}")
 
-    # Evaluate the posterior estimate
-    posterior, _ = posterior_estimate(
-        gflownet,
-        params,
-        env,
-        key,
-        num_samples=args.num_samples_posterior,
-        desc='Sampling from posterior'
-    )
+    # Sample from the learned policy
+    # TODO: 
+    # learned_graphs = sample_from(
+    #     gflownet,
+    #     params,
+    #     env,
+    #     key,
+    #     num_samples=args.num_learned_samples,
+    # )
 
     # Compute the metrics
-    ground_truth = nx.to_numpy_array(graph, weight=None)
-    wandb.run.summary.update({
-        'metrics/shd/mean': expected_shd(posterior, ground_truth),
-        'metrics/edges/mean': expected_edges(posterior),
-        'metrics/thresholds': threshold_metrics(posterior, ground_truth)
-    })
+    # TODO: This could serve as an inspiration for our evaluation as well
+    # ground_truth = nx.to_numpy_array(graph, weight=None)
+    # wandb.run.summary.update({
+    #     'metrics/shd/mean': expected_shd(posterior, ground_truth),
+    #     'metrics/edges/mean': expected_edges(posterior),
+    #     'metrics/thresholds': threshold_metrics(posterior, ground_truth)
+    # })
 
-    # For small enough graphs, evaluate the full posterior
-    if (args.graph in ['erdos_renyi_lingauss']) and (args.num_variables < 6):
-        log_features = get_log_features(posterior, data.columns)
-        full_posterior = get_full_posterior(data, scorer, verbose=True)
-        full_posterior.save(os.path.join(wandb.run.dir, 'posterior_full.npz'))
-        wandb.save('posterior_full.npz', policy='now')
 
-        full_edge_log_features = get_edge_log_features(full_posterior)
-        full_path_log_features = get_path_log_features(full_posterior)
-        full_markov_log_features = get_markov_blanket_log_features(full_posterior)
+    # if (args.graph in ['erdos_renyi_lingauss']) and (args.num_variables < 6):
+    #     log_features = get_log_features(posterior, data.columns)
+    #     full_posterior = get_full_posterior(data, scorer, verbose=True)
+    #     full_posterior.save(os.path.join(wandb.run.dir, 'posterior_full.npz'))
+    #     wandb.save('posterior_full.npz', policy='now')
 
-        wandb.log({
-            'posterior/scatter/edge': scatter_from_dicts('full', full_edge_log_features,
-                'estimate', log_features.edge, transform=np.exp, title='Edge features'),
-            'posterior/scatter/path': scatter_from_dicts('full', full_path_log_features,
-                'estimate', log_features.path, transform=np.exp, title='Path features'),
-            'posterior/scatter/markov_blanket': scatter_from_dicts('full', full_markov_log_features,
-                'estimate', log_features.markov_blanket, transform=np.exp, title='Markov blanket features')
-        })
+    #     full_edge_log_features = get_edge_log_features(full_posterior)
+    #     full_path_log_features = get_path_log_features(full_posterior)
+    #     full_markov_log_features = get_markov_blanket_log_features(full_posterior)
 
-    # Save model, data & results
-    data.to_csv(os.path.join(wandb.run.dir, 'data.csv'))
-    wandb.save('data.csv', policy='now')
+    #     wandb.log({
+    #         'posterior/scatter/edge': scatter_from_dicts('full', full_edge_log_features,
+    #             'estimate', log_features.edge, transform=np.exp, title='Edge features'),
+    #         'posterior/scatter/path': scatter_from_dicts('full', full_path_log_features,
+    #             'estimate', log_features.path, transform=np.exp, title='Path features'),
+    #         'posterior/scatter/markov_blanket': scatter_from_dicts('full', full_markov_log_features,
+    #             'estimate', log_features.markov_blanket, transform=np.exp, title='Markov blanket features')
+    #     })
 
-    with open(os.path.join(wandb.run.dir, 'graph.pkl'), 'wb') as f:
-        pickle.dump(graph, f)
-    wandb.save('graph.pkl', policy='now')
+    # TODO: Save model, data & results
+    # data.to_csv(os.path.join(wandb.run.dir, 'data.csv'))
+    # wandb.save('data.csv', policy='now')
 
-    io.save(os.path.join(wandb.run.dir, 'model.npz'), params=params)
-    wandb.save('model.npz', policy='now')
+    # with open(os.path.join(wandb.run.dir, 'graph.pkl'), 'wb') as f:
+    #     pickle.dump(graph, f)
+    # wandb.save('graph.pkl', policy='now')
 
-    replay.save(os.path.join(wandb.run.dir,  'replay_buffer.npz'))
-    wandb.save('replay_buffer.npz', policy='now')
+    # io.save(os.path.join(wandb.run.dir, 'model.npz'), params=params)
+    # wandb.save('model.npz', policy='now')
 
-    np.save(os.path.join(wandb.run.dir, 'posterior.npy'), posterior)
-    wandb.save('posterior.npy', policy='now')
+    # replay.save(os.path.join(wandb.run.dir,  'replay_buffer.npz'))
+    # wandb.save('replay_buffer.npz', policy='now')
+
+    # np.save(os.path.join(wandb.run.dir, 'posterior.npy'), posterior)
+    # wandb.save('posterior.npy', policy='now')
 
 
 if __name__ == '__main__':
@@ -180,13 +185,6 @@ if __name__ == '__main__':
     environment = parser.add_argument_group('Environment')
     environment.add_argument('--num_envs', type=int, default=8,
         help='Number of parallel environments (default: %(default)s)')
-    environment.add_argument('--scorer_kwargs', type=json.loads, default='{}',
-        help='Arguments of the scorer.')
-    environment.add_argument('--prior', type=str, default='uniform',
-        choices=['uniform', 'erdos_renyi', 'edge', 'fair'],
-        help='Prior over graphs (default: %(default)s)')
-    environment.add_argument('--prior_kwargs', type=json.loads, default='{}',
-        help='Arguments of the prior over graphs.')
 
     # Optimization
     optimization = parser.add_argument_group('Optimization')
@@ -195,7 +193,7 @@ if __name__ == '__main__':
     optimization.add_argument('--delta', type=float, default=1.,
         help='Value of delta for Huber loss (default: %(default)s)')
     optimization.add_argument('--batch_size', type=int, default=32,
-        help='Batch size (default: %(default)s)')
+        help='Batch size for the number of elements to sample from the replay buffer (default: %(default)s)')
     optimization.add_argument('--num_iterations', type=int, default=100_000,
         help='Number of iterations (default: %(default)s)')
 
@@ -214,33 +212,26 @@ if __name__ == '__main__':
     
     # Miscellaneous
     misc = parser.add_argument_group('Miscellaneous')
-    misc.add_argument('--num_samples_posterior', type=int, default=1000,
-        help='Number of samples for the posterior estimate (default: %(default)s)')
+    misc.add_argument('--num_learned_samples', type=int, default=1000,
+        help='How many samples to draw from the learned GFN policy for evaluation? (default: %(default)s)')
     misc.add_argument('--seed', type=int, default=0,
         help='Random seed (default: %(default)s)')
-    misc.add_argument('--num_workers', type=int, default=4,
-        help='Number of workers (default: %(default)s)')
-    misc.add_argument('--mp_context', type=str, default='spawn',
-        help='Multiprocessing context (default: %(default)s)')
     misc.add_argument('--log_every', type=int, default=50,
         help='Frequency for logging (default: %(default)s)')
+    misc.add_argument('--off_wandb', action='store_true', default=False,
+        help='Whether to use Wandb for logs (default: %(default)s)')
 
-    subparsers = parser.add_subparsers(help='Type of graph', dest='graph')
-
-    # Erdos-Renyi Linear-Gaussian graphs
-    er_lingauss = subparsers.add_parser('erdos_renyi_lingauss')
-    er_lingauss.add_argument('--num_variables', type=int, required=True,
-        help='Number of variables')
-    er_lingauss.add_argument('--num_edges', type=int, required=True,
-        help='Average number of edges')
-    er_lingauss.add_argument('--num_samples', type=int, required=True,
-        help='Number of samples')
-
-    # Flow cytometry data (Sachs) with observational data
-    sachs_continuous = subparsers.add_parser('sachs_continuous')
-
-    # Flow cytometry data (Sachs) with interventional data
-    sachs_intervention = subparsers.add_parser('sachs_interventional')
+    # Graph
+    graph_args = parser.add_argument_group('Graph')
+    
+    graph_args.add_argument('--num_variables', type=int, required=True,
+        help='Maximum number of latent variables that can be sampled')
+    graph_args.add_argument('--num_edges', type=int, required=True,
+        help='Average number of edges') # TODO: Maybe could replace this with 
+    # average size of a clique, or some other regularization term for the 
+    # potentials
+    graph_args.add_argument('--num_samples', type=int, required=True,
+        help='How many samples to draw for the ground truth observations x?')
 
     args = parser.parse_args()
 

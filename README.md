@@ -1,6 +1,6 @@
 # partial-cliques
 
-[Installation](#installation) - [Example](#example) - [Citation](#citation)
+[Installation](#installation) - [Example](#example)
 
 
 ## Installation

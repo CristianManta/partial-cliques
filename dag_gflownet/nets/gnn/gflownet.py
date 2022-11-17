@@ -5,7 +5,7 @@ import math
 
 from jax import lax, nn
 
-from dag_gflownet.utils.gflownet import log_policy
+from dag_gflownet.utils.gflownet import log_policy_cliques
 
 
 def clique_policy(graphs, masks, max_nodes):
@@ -16,12 +16,21 @@ def clique_policy(graphs, masks, max_nodes):
         Batch of graphs. Each graph in the batch corresponds to the current 
         state in a parallel instantiation of the environment (there are 
         `batch_size` parallel environments)
-    masks: np.ndarray
-        batch of masks revealing which nodes have already been sampled, 
-        to prevent a given node from being sampled twice
+    masks: np.ndarray of shape (batch_size, max_nodes)
+        Batch of masks revealing which nodes have already been sampled, 
+        to prevent a given node from being sampled twice. masks[i, j] = 0 iff 
+        node j from batch i has already been sampled and is thus unavailable 
+        for re-sampling
     max_nodes: int
         Maximal number of nodes to sample from. In our current setting, 
         it corresponds to the number of nodes in the ground truth graph
+        
+    Returns
+    -------
+    log_policy_cliques: jnp.DeviceArray of shape (batch_size, num_actions) = 
+    (batch_size, max_nodes + 1)
+        Log probabilities for each possible action, including the stop action
+    
     """
     batch_size, num_variables = masks.shape[:2]
 
@@ -81,4 +90,4 @@ def clique_policy(graphs, masks, max_nodes):
         init=hk.initializers.Constant(math.log(math.expm1(1))))
     temperature = nn.softplus(temperature)
 
-    return log_policy(logits / temperature, stop, masks)
+    return log_policy_cliques(logits / temperature, stop, masks)

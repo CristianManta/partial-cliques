@@ -8,7 +8,7 @@ from jax import lax, nn
 from dag_gflownet.utils.gflownet import log_policy_cliques
 
 
-def clique_policy(graphs, masks, max_nodes):
+def clique_policy(graphs, masks):
     """
     Parameters
     ----------
@@ -20,10 +20,8 @@ def clique_policy(graphs, masks, max_nodes):
         Batch of masks revealing which nodes have already been sampled, 
         to prevent a given node from being sampled twice. masks[i, j] = 0 iff 
         node j from batch i has already been sampled and is thus unavailable 
-        for re-sampling
-    max_nodes: int
-        Maximal number of nodes to sample from. In our current setting, 
-        it corresponds to the number of nodes in the ground truth graph
+        for re-sampling. max_nodes is the maximal number of nodes to sample from. 
+        In our current setting, it corresponds to the number of nodes in the ground truth graph
         
     Returns
     -------
@@ -32,10 +30,10 @@ def clique_policy(graphs, masks, max_nodes):
         Log probabilities for each possible action, including the stop action
     
     """
-    batch_size, num_variables = masks.shape[:2]
+    batch_size, max_nodes = masks.shape
 
     # Embedding of the nodes & edges
-    node_embeddings = hk.Embed(num_variables, embed_dim=128)
+    node_embeddings = hk.Embed(max_nodes, embed_dim=128) # This can be prohibitive for very large ground truth latent graph, but for now it will do
     edge_embedding = hk.get_parameter('edge_embed', shape=(1, 128),
         init=hk.initializers.TruncatedNormal())
 

@@ -17,10 +17,10 @@ def clique_policy(graphs, masks):
         state in a parallel instantiation of the environment (there are 
         `batch_size` parallel environments)
     masks: np.ndarray of shape (batch_size, max_nodes)
-        Batch of masks revealing which nodes have already been sampled, 
-        to prevent a given node from being sampled twice. masks[i, j] = 0 iff 
-        node j from batch i has already been sampled and is thus unavailable 
-        for re-sampling. max_nodes is the maximal number of nodes to sample from. 
+        Batch of masks to prevent a given node from being sampled twice. 
+        In addition, we also mask the nodes which are not part of a current incomplete 
+        clique. masks[i, j] = 0 iff node j from batch i is unavailable 
+        for sampling at this step. max_nodes is the maximal number of nodes to sample from. 
         In our current setting, it corresponds to the number of nodes in the ground truth graph
         
     Returns

@@ -8,39 +8,48 @@ from jax import lax, nn
 from dag_gflownet.utils.gflownet import log_policy_cliques
 
 
-def clique_policy(graphs, masks):
+def clique_policy(graphs, masks, k):
     """
     Parameters
     ----------
-    graphs: jraph._src.graph.GraphsTuple
-        Batch of graphs. Each graph in the batch corresponds to the current 
+    graphs: namedtuple `Graph` of (jraph._src.graph.GraphsTuple, jraph._src.graph.GraphsTuple)
+        Each element of the tuple is a batch of graphs encoded as a single GraphsTuple. 
+        Each graph in the batch corresponds to the current 
         state in a parallel instantiation of the environment (there are 
-        `batch_size` parallel environments)
+        `batch_size` parallel environments).
+        The distinction between the two elements in the tuple is that the first 
+        element encodes in the node features the node identities, while the 
+        second element encodes the node values (which are discrete).
     masks: np.ndarray of shape (batch_size, max_nodes)
         Batch of masks to prevent a given node from being sampled twice. 
         In addition, we also mask the nodes which are not part of a current incomplete 
         clique. masks[i, j] = 0 iff node j from batch i is unavailable 
         for sampling at this step. max_nodes is the maximal number of nodes to sample from. 
-        In our current setting, it corresponds to the number of nodes in the ground truth graph
+        In our current setting, it corresponds to the number of nodes in the ground truth graph.
+    k: int
+        Number of different discrete values that the nodes can take.
         
     Returns
     -------
     log_policy_cliques: jnp.DeviceArray of shape (batch_size, num_actions) = 
     (batch_size, max_nodes + 1)
         Log probabilities for each possible action, including the stop action
-    
     """
     batch_size, max_nodes = masks.shape
 
     # Embedding of the nodes & edges
-    node_embeddings = hk.Embed(max_nodes, embed_dim=128) # This can be prohibitive for very large ground truth latent graph, but for now it will do
+    node_embeddings_list = hk.Embed(max_nodes + k, embed_dim=128)
     edge_embedding = hk.get_parameter('edge_embed', shape=(1, 128),
         init=hk.initializers.TruncatedNormal())
+    
+    structural_embeddings = node_embeddings_list(graphs.structure.nodes)
+    value_embeddings = node_embeddings_list(graphs.values.nodes)
+    node_embeddings = structural_embeddings + value_embeddings
 
-    graphs = graphs._replace(
-        nodes=node_embeddings(graphs.nodes),
-        edges=jnp.repeat(edge_embedding, graphs.edges.shape[0], axis=0),
-        globals=jnp.zeros((graphs.n_node.shape[0], 1)),
+    graphs = graphs.structure._replace(
+        nodes=node_embeddings,
+        edges=jnp.repeat(edge_embedding, graphs.structure.edges.shape[0], axis=0),
+        globals=jnp.zeros((graphs.structure.n_node.shape[0], 1)),
     )
 
     # Define graph network updates
@@ -80,7 +89,6 @@ def clique_policy(graphs, masks):
     
     # node_features = node_features.reshape(batch_size, -1)
     logits = hk.nets.MLP([128, 128, 128, max_nodes], name='logits')(global_features) # Maybe 3 layers is too much. Can try different things here. Alternative: can try using node_features instead.
-
     stop = hk.nets.MLP([128, 1], name='stop')(global_features)
 
     # Initialize the temperature parameter to 1

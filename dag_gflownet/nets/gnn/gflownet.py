@@ -105,8 +105,7 @@ def clique_policy(graphs, masks):
 
     # Initialize the temperature parameter to 1
     temperature = hk.get_parameter('temperature', (),
-        init=hk.initializers.Constant(math.log(math.expm1(1))))
-    temperature = nn.softplus(temperature)
+        init=hk.initializers.Constant(1))
 
     return log_policy_cliques(logits / temperature, stop, masks)
 
@@ -213,10 +212,9 @@ def value_policy(graphs, masks):
     log_flows = hk.nets.MLP([128, 1], name='log_flows')(global_features)
     log_flows = jnp.squeeze(log_flows)
 
-    # Initialize the temperature parameter to 1
+    # Initialize the temperature parameter to 1    
     temperature = hk.get_parameter('temperature', (),
-        init=hk.initializers.Constant(math.log(math.expm1(1))))
-    temperature = nn.softplus(temperature)
+        init=hk.initializers.Constant(1))
 
     return (nn.log_sigmoid(target_logits / temperature), log_flows)
 

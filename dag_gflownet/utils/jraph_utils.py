@@ -1,5 +1,8 @@
 import numpy as np
 import jraph
+from collections import namedtuple
+
+Graph = namedtuple('Graph', ['structure', 'values'])
 
 
 def to_graphs_tuple(adjacencies, pad=True):

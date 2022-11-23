@@ -94,8 +94,7 @@ def detailed_balance_loss(
     return (loss, logs)
 
 
-def log_policy(logits, stop, masks):
-    masks = masks.reshape(logits.shape)
+def log_policy_cliques(logits, stop, masks):
     masked_logits = mask_logits(logits, masks)
     can_continue = jnp.any(masks, axis=-1, keepdims=True)
 

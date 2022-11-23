@@ -14,6 +14,7 @@ from dag_gflownet.env import GFlowNetDAGEnv
 from dag_gflownet.gflownet import DAGGFlowNet
 from dag_gflownet.utils.replay_buffer import ReplayBuffer
 from dag_gflownet.utils.factories import get_scorer
+from dag_gflownet.utils.data import get_data
 from dag_gflownet.utils.gflownet import posterior_estimate
 from dag_gflownet.utils.metrics import expected_shd, expected_edges, threshold_metrics, get_log_features
 from dag_gflownet.utils.jraph_utils import to_graphs_tuple
@@ -41,8 +42,9 @@ def main(args):
 
     # Generate the ground truth data 
     #TODO: 
-    latent_data, obs_data, graph = (None, None, None)
-    
+    graph, data, _ = get_scorer(args, rng=rng)
+    latent_data, obs_data = data
+
     # Create the environment
     # TODO:
     env = GFlowNetDAGEnv(
@@ -234,6 +236,10 @@ if __name__ == '__main__':
     # potentials
     graph_args.add_argument('--num_samples', type=int, required=True,
         help='How many samples to draw for the ground truth observations x?')
+    graph_args.add_argument('--x_dim', type=int, required=True,
+        help='The number of observations variables?')
+    graph_args.add_argument('--h_dim', type=int, required=True,
+        help='The number of latent variables?')
 
     args = parser.parse_args()
 

@@ -2,7 +2,7 @@ import numpy as np
 import jraph
 from collections import namedtuple
 
-Graph = namedtuple('Graph', ['structure', 'values'])
+Graph = namedtuple("Graph", ["structure", "values"])
 
 
 def to_graphs_tuple(adjacencies, pad=True):
@@ -16,7 +16,7 @@ def to_graphs_tuple(adjacencies, pad=True):
     nodes = np.tile(np.arange(num_variables), num_graphs)
     edges = np.ones_like(senders)
 
-    graphs_tuple =  jraph.GraphsTuple(
+    graphs_tuple = jraph.GraphsTuple(
         nodes=nodes,
         edges=edges,
         senders=senders + counts * num_variables,
@@ -47,4 +47,5 @@ def pad_graph_to_nearest_power_of_two(graphs_tuple):
     # We do not pad to nearest power of two because the batch size is fixed.
     pad_graphs_to = graphs_tuple.n_node.shape[0] + 1
     return jraph.pad_with_graphs(
-        graphs_tuple, pad_nodes_to, pad_edges_to, pad_graphs_to)
+        graphs_tuple, pad_nodes_to, pad_edges_to, pad_graphs_to
+    )

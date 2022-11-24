@@ -8,7 +8,7 @@ from collections import namedtuple
 from dag_gflownet.scores.base import BaseScore, LocalScore
 
 
-StateCounts = namedtuple('StateCounts', ['key', 'counts'])
+StateCounts = namedtuple("StateCounts", ["key", "counts"])
 
 
 class BDeScore(BaseScore):
@@ -21,7 +21,7 @@ class BDeScore(BaseScore):
         corresponds to one variable. If there is interventional data, the
         interventional targets must be specified in the "INT" column (the
         indices of interventional targets are assumed to be 1-based).
-    
+
     prior : `BasePrior` instance
         The prior over graphs p(G).
 
@@ -30,12 +30,13 @@ class BDeScore(BaseScore):
         Dirichlet hyperparameters. The score is sensitive to this value,
         runs with different values might be useful.
     """
-    def __init__(self, data, prior, equivalent_sample_size=1.):
-        if 'INT' in data.columns:  # Interventional data
+
+    def __init__(self, data, prior, equivalent_sample_size=1.0):
+        if "INT" in data.columns:  # Interventional data
             # Indices should start at 0, instead of 1;
             # observational data will have INT == -1.
             self._interventions = data.INT.map(lambda x: int(x) - 1)
-            data = data.drop(['INT'], axis=1)
+            data = data.drop(["INT"], axis=1)
         else:
             self._interventions = np.full(data.shape[0], -1)
         self.equivalent_sample_size = equivalent_sample_size
@@ -49,7 +50,8 @@ class BDeScore(BaseScore):
     def get_local_scores(self, target, indices, indices_after=None):
         # Get all the state counts
         state_counts_before, state_counts_after = self.state_counts(
-            target, indices, indices_after=indices_after)
+            target, indices, indices_after=indices_after
+        )
 
         local_score_after = self.local_score(*state_counts_after)
         if state_counts_before is not None:
@@ -68,9 +70,7 @@ class BDeScore(BaseScore):
         data = self.data[self._interventions != target]
         data = data[[variable] + parents].dropna()
 
-        state_count_data = (data.groupby([variable] + parents)
-                                .size()
-                                .unstack(parents))
+        state_count_data = data.groupby([variable] + parents).size().unstack(parents)
 
         if isinstance(state_count_data, pd.DataFrame):
             if not isinstance(state_count_data.columns, pd.MultiIndex):
@@ -81,31 +81,26 @@ class BDeScore(BaseScore):
             parent_states = [self.state_names[parent] for parent in parents]
             columns_index = pd.MultiIndex.from_product(parent_states, names=parents)
 
-            counts_after = (state_count_data
-                .reindex(index=self.state_names[variable], columns=columns_index)
-                .fillna(0)
-            )
+            counts_after = state_count_data.reindex(
+                index=self.state_names[variable], columns=columns_index
+            ).fillna(0)
         else:
             counts_after = state_count_data.to_frame()
 
         state_counts_after = StateCounts(
-            key=(target, tuple(all_indices)),
-            counts=counts_after
+            key=(target, tuple(all_indices)), counts=counts_after
         )
 
         if indices_after is not None:
             subset_parents = [self.column_names[index] for index in indices]
             if subset_parents:
-                data = (state_counts_after.counts
-                    .groupby(axis=1, level=subset_parents)
-                    .sum())
+                data = state_counts_after.counts.groupby(
+                    axis=1, level=subset_parents
+                ).sum()
             else:
                 data = state_counts_after.counts.sum(axis=1).to_frame()
 
-            state_counts_before = StateCounts(
-                key=(target, tuple(indices)),
-                counts=data
-            )
+            state_counts_before = StateCounts(key=(target, tuple(indices)), counts=data)
         else:
             state_counts_before = None
 
@@ -134,8 +129,4 @@ class BDeScore(BaseScore):
             - counts.size * math.lgamma(beta)
         )
 
-        return LocalScore(
-            key=key,
-            score=local_score,
-            prior=self.prior(num_parents)
-        )
+        return LocalScore(key=key, score=local_score, prior=self.prior(num_parents))

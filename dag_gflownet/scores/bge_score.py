@@ -40,19 +40,13 @@ class BGeScore(BaseScore):
         parameter must satisfy `alpha_w > N - 1`, where `N` is the number
         of varaibles. By default, `alpha_w = N + 2`.
     """
-    def __init__(
-            self,
-            data,
-            prior,
-            mean_obs=None,
-            alpha_mu=1.,
-            alpha_w=None
-        ):
+
+    def __init__(self, data, prior, mean_obs=None, alpha_mu=1.0, alpha_w=None):
         num_variables = len(data.columns)
         if mean_obs is None:
             mean_obs = np.zeros((num_variables,))
         if alpha_w is None:
-            alpha_w = num_variables + 2.
+            alpha_w = num_variables + 2.0
 
         super().__init__(data, prior)
         self.mean_obs = mean_obs
@@ -60,24 +54,39 @@ class BGeScore(BaseScore):
         self.alpha_w = alpha_w
 
         self.num_samples = self.data.shape[0]
-        self.t = (self.alpha_mu * (self.alpha_w - self.num_variables - 1)) / (self.alpha_mu + 1)
+        self.t = (self.alpha_mu * (self.alpha_w - self.num_variables - 1)) / (
+            self.alpha_mu + 1
+        )
 
         T = self.t * np.eye(self.num_variables)
         data = np.asarray(self.data)
         data_mean = np.mean(data, axis=0, keepdims=True)
         data_centered = data - data_mean
 
-        self.R = (T + np.dot(data_centered.T, data_centered)
+        self.R = (
+            T
+            + np.dot(data_centered.T, data_centered)
             + ((self.num_samples * self.alpha_mu) / (self.num_samples + self.alpha_mu))
             * np.dot((data_mean - self.mean_obs).T, data_mean - self.mean_obs)
         )
         all_parents = np.arange(self.num_variables)
         self.log_gamma_term = (
             0.5 * (math.log(self.alpha_mu) - math.log(self.num_samples + self.alpha_mu))
-            + gammaln(0.5 * (self.num_samples + self.alpha_w - self.num_variables + all_parents + 1))
+            + gammaln(
+                0.5
+                * (
+                    self.num_samples
+                    + self.alpha_w
+                    - self.num_variables
+                    + all_parents
+                    + 1
+                )
+            )
             - gammaln(0.5 * (self.alpha_w - self.num_variables + all_parents + 1))
             - 0.5 * self.num_samples * math.log(math.pi)
-            + 0.5 * (self.alpha_w - self.num_variables + 2 * all_parents + 1) * math.log(self.t)
+            + 0.5
+            * (self.alpha_w - self.num_variables + 2 * all_parents + 1)
+            * math.log(self.t)
         )
 
     def local_score(self, target, indices):
@@ -86,20 +95,24 @@ class BGeScore(BaseScore):
         if indices:
             variables = [target] + list(indices)
 
-            log_term_r = (
-                0.5 * (self.num_samples + self.alpha_w - self.num_variables + num_parents)
-                * logdet(self.R[np.ix_(indices, indices)])
-                - 0.5 * (self.num_samples + self.alpha_w - self.num_variables + num_parents + 1)
-                * logdet(self.R[np.ix_(variables, variables)])
+            log_term_r = 0.5 * (
+                self.num_samples + self.alpha_w - self.num_variables + num_parents
+            ) * logdet(self.R[np.ix_(indices, indices)]) - 0.5 * (
+                self.num_samples + self.alpha_w - self.num_variables + num_parents + 1
+            ) * logdet(
+                self.R[np.ix_(variables, variables)]
             )
         else:
-            log_term_r = (-0.5 * (self.num_samples + self.alpha_w - self.num_variables + 1)
-                * np.log(np.abs(self.R[target, target])))
+            log_term_r = (
+                -0.5
+                * (self.num_samples + self.alpha_w - self.num_variables + 1)
+                * np.log(np.abs(self.R[target, target]))
+            )
 
         return LocalScore(
             key=(target, tuple(indices)),
             score=self.log_gamma_term[num_parents] + log_term_r,
-            prior=self.prior(num_parents)
+            prior=self.prior(num_parents),
         )
 
     def get_local_scores(self, target, indices, indices_after=None):

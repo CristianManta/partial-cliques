@@ -12,17 +12,12 @@ MASKED_VALUE = -1e5
 
 
 def mask_logits(logits, masks):
-    return masks * logits + (1. - masks) * MASKED_VALUE
+    return masks * logits + (1.0 - masks) * MASKED_VALUE
 
 
 def detailed_balance_loss(
-        log_pi_t,
-        log_pi_tp1,
-        actions,
-        delta_scores,
-        num_edges,
-        delta=1.
-    ):
+    log_pi_t, log_pi_tp1, actions, delta_scores, num_edges, delta=1.0
+):
     r"""Detailed balance loss.
 
     This function computes the detailed balance loss, in the specific case
@@ -83,13 +78,16 @@ def detailed_balance_loss(
     # Compute the backward log-probabilities
     log_pB = -jnp.log1p(num_edges)
 
-    error = (jnp.squeeze(delta_scores + log_pB - log_pF, axis=-1)
-        + log_pi_t[:, -1] - log_pi_tp1[:, -1])
+    error = (
+        jnp.squeeze(delta_scores + log_pB - log_pF, axis=-1)
+        + log_pi_t[:, -1]
+        - log_pi_tp1[:, -1]
+    )
     loss = jnp.mean(optax.huber_loss(error, delta=delta))
 
     logs = {
-        'error': error,
-        'loss': loss,
+        "error": error,
+        "loss": loss,
     }
     return (loss, logs)
 
@@ -98,8 +96,7 @@ def log_policy_cliques(logits, stop, masks):
     masked_logits = mask_logits(logits, masks)
     can_continue = jnp.any(masks, axis=-1, keepdims=True)
 
-    logp_continue = (nn.log_sigmoid(-stop)
-        + nn.log_softmax(masked_logits, axis=-1))
+    logp_continue = nn.log_sigmoid(-stop) + nn.log_softmax(masked_logits, axis=-1)
     logp_stop = nn.log_sigmoid(stop)
 
     # In case there is no valid action other than stop
@@ -120,14 +117,8 @@ def uniform_log_policy(masks):
 
 
 def posterior_estimate(
-        gflownet,
-        params,
-        env,
-        key,
-        num_samples=1000,
-        verbose=True,
-        **kwargs
-    ):
+    gflownet, params, env, key, num_samples=1000, verbose=True, **kwargs
+):
     """Get the posterior estimate of DAG-GFlowNet as a collection of graphs
     sampled from the GFlowNet.
 
@@ -167,15 +158,15 @@ def posterior_estimate(
     observations = env.reset()
     with trange(num_samples, disable=(not verbose), **kwargs) as pbar:
         while len(samples) < num_samples:
-            order = observations['order']
-            observations['graph'] = to_graphs_tuple(observations['adjacency'])
-            actions, key, _ = gflownet.act(params, key, observations, 1.)
+            order = observations["order"]
+            observations["graph"] = to_graphs_tuple(observations["adjacency"])
+            actions, key, _ = gflownet.act(params, key, observations, 1.0)
             observations, _, dones, _ = env.step(np.asarray(actions))
 
             samples.extend([order[i] for i, done in enumerate(dones) if done])
             pbar.update(min(num_samples - pbar.n, np.sum(dones).item()))
     orders = np.stack(samples[:num_samples], axis=0)
     logs = {
-        'orders': orders,
+        "orders": orders,
     }
     return ((orders >= 0).astype(np.int_), logs)

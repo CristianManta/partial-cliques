@@ -1,5 +1,6 @@
 _PREV, _NEXT, _KEY, _VALUE = 0, 1, 2, 3
 
+
 class LRUCache:
     def __init__(self, max_size):
         self.max_size = max_size
@@ -15,7 +16,7 @@ class LRUCache:
         link = self.mapping.get(key, self.head)
 
         if link is not self.head:
-            raise KeyError(f'Key {key} already in cache.')
+            raise KeyError(f"Key {key} already in cache.")
 
         if len(self.mapping) >= self.max_size:
             # Unlink the least recently used element
@@ -33,7 +34,7 @@ class LRUCache:
         link = self.mapping.get(key, self.head)
 
         if link is self.head:
-            raise KeyError(f'Key {key} not in cache.')
+            raise KeyError(f"Key {key} not in cache.")
 
         # Unlink element from current position
         link_prev, link_next, key, value = link

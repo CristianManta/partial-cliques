@@ -10,7 +10,7 @@ def save(filename, **trees):
         if isinstance(tree, Mapping):
             tree = hk.data_structures.to_haiku_dict(tree)
             for module_name, name, value in hk.data_structures.traverse(tree):
-                data[f'{prefix}/{module_name}/{name}'] = value
+                data[f"{prefix}/{module_name}/{name}"] = value
         else:
             data[prefix] = tree
 
@@ -19,13 +19,13 @@ def save(filename, **trees):
 
 def load(filename, **kwargs):
     data = {}
-    f = open(filename, 'rb') if isinstance(filename, str) else filename
+    f = open(filename, "rb") if isinstance(filename, str) else filename
     results = np.load(f, **kwargs)
 
     for key in results.files:
-        prefix, delimiter, name = key.rpartition('/')
+        prefix, delimiter, name = key.rpartition("/")
         if delimiter:
-            prefix, _, module_name = prefix.partition('/')
+            prefix, _, module_name = prefix.partition("/")
             if prefix not in data:
                 data[prefix] = {}
             if module_name not in data[prefix]:
@@ -37,7 +37,7 @@ def load(filename, **kwargs):
     for prefix, tree in data.items():
         if isinstance(tree, dict):
             data[prefix] = hk.data_structures.to_haiku_dict(tree)
-    
+
     if isinstance(filename, str):
         f.close()
     del results

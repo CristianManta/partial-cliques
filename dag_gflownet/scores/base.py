@@ -6,11 +6,12 @@ from collections import namedtuple
 from abc import ABC, abstractmethod
 from pgmpy.estimators import StructureScore
 
-LocalScore = namedtuple('LocalScore', ['key', 'score', 'prior'])
+LocalScore = namedtuple("LocalScore", ["key", "score", "prior"])
+
 
 class BaseScore(ABC, StructureScore):
     """Base class for the scorer.
-    
+
     Parameters
     ----------
     data : pd.DataFrame
@@ -19,12 +20,14 @@ class BaseScore(ABC, StructureScore):
     prior : `BasePrior` instance
         The prior over graphs p(G).
     """
+
     def __init__(self, data, prior):
         self.data = data
         self.prior = prior
         self.column_names = list(data.columns)
-        self.column_names_to_idx = dict((name, idx)
-            for (idx, name) in enumerate(self.column_names))
+        self.column_names_to_idx = dict(
+            (name, idx) for (idx, name) in enumerate(self.column_names)
+        )
         self.num_variables = len(self.column_names)
         self.prior.num_variables = self.num_variables
         self._cache_local_scores = None
@@ -38,7 +41,8 @@ class BaseScore(ABC, StructureScore):
 
                 target, indices, indices_after = data
                 local_score_before, local_score_after = self.get_local_scores(
-                    target, indices, indices_after=indices_after)
+                    target, indices, indices_after=indices_after
+                )
 
                 out_queue.put((True, *local_score_after))
                 if local_score_before is not None:
@@ -63,23 +67,25 @@ class BaseScore(ABC, StructureScore):
         score = 0
         for node in graph.nodes():
             _, local_score = self.cache_local_scores(
-                node, tuple(graph.predecessors(node)))
+                node, tuple(graph.predecessors(node))
+            )
             score += local_score.score + local_score.prior
         return score
 
 
 class BasePrior(ABC):
     """Base class for the prior over graphs p(G).
-    
+
     Any subclass of `BasePrior` must return the contribution of log p(G) for a
     given variable with `num_parents` parents. We assume that the prior is modular.
-    
+
     Parameters
     ----------
     num_variables : int (optional)
         The number of variables in the graph. If not specified, this gets
         populated inside the scorer class.
     """
+
     def __init__(self, num_variables=None):
         self._num_variables = num_variables
         self._log_prior = None
@@ -95,7 +101,7 @@ class BasePrior(ABC):
     @property
     def num_variables(self):
         if self._num_variables is None:
-            raise RuntimeError('The number of variables is not defined.')
+            raise RuntimeError("The number of variables is not defined.")
         return self._num_variables
 
     @num_variables.setter

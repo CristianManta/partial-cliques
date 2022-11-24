@@ -25,7 +25,8 @@ class DAGGFlowNet:
         The value of delta for the Huber loss used in the detailed balance
         loss (in place of the L2 loss) to avoid gradient explosion.
     """
-    def __init__(self, model=None, delta=1.):
+
+    def __init__(self, model=None, delta=1.0):
         if model is None:
             model = gflownet
 
@@ -89,16 +90,18 @@ class DAGGFlowNet:
 
         return (params, state, logs)
 
-    def init(self, key, optimizer, graph, mask): # TODO: Change graph and mask to other
+    def init(self, key, optimizer, graph, mask):  # TODO: Change graph and mask to other
         # Set the optimizer
         self._optimizer = optax.chain(optimizer, optax.zero_nans())
-        params = self.model.init(key, graph, mask) # TODO: Change input of model
+        params = self.model.init(key, graph, mask)  # TODO: Change input of model
         state = self.optimizer.init(params)
         return (params, state)
 
     @property
     def optimizer(self):
         if self._optimizer is None:
-            raise RuntimeError('The optimizer is not defined. To train the '
-                               'GFlowNet, you must call `DAGGFlowNet.init` first.')
+            raise RuntimeError(
+                "The optimizer is not defined. To train the "
+                "GFlowNet, you must call `DAGGFlowNet.init` first."
+            )
         return self._optimizer

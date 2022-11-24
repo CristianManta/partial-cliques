@@ -10,11 +10,7 @@ from dag_gflownet.utils.cache import LRUCache
 
 
 class GFlowNetDAGEnv(gym.vector.VectorEnv):
-    def __init__(
-            self,
-            num_envs,
-            num_variables
-        ):
+    def __init__(self, num_envs, num_variables):
         """GFlowNet environment for learning a distribution over DAGs.
 
         Parameters
@@ -31,7 +27,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
 
         shape = (self.num_variables, self.num_variables)
         # TODO: Change this to contain (name, value) tuples
-        # observation_space = Dict({ 
+        # observation_space = Dict({
         #     'adjacency': Box(low=0., high=1., shape=shape, dtype=np.int_),
         #     'mask': Box(low=0., high=1., shape=shape, dtype=np.int_),
         #     'num_edges': Discrete(max_edges),

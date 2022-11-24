@@ -16,21 +16,34 @@ from dag_gflownet.utils.replay_buffer import ReplayBuffer
 from dag_gflownet.utils.factories import get_scorer
 from dag_gflownet.utils.data import get_data
 from dag_gflownet.utils.gflownet import posterior_estimate
-from dag_gflownet.utils.metrics import expected_shd, expected_edges, threshold_metrics, get_log_features
+from dag_gflownet.utils.metrics import (
+    expected_shd,
+    expected_edges,
+    threshold_metrics,
+    get_log_features,
+)
 from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 from dag_gflownet.utils import io
-from dag_gflownet.utils.wandb_utils import slurm_infos, table_from_dict, scatter_from_dicts
-from dag_gflownet.utils.exhaustive import (get_full_posterior,
-    get_edge_log_features, get_path_log_features, get_markov_blanket_log_features)
+from dag_gflownet.utils.wandb_utils import (
+    slurm_infos,
+    table_from_dict,
+    scatter_from_dicts,
+)
+from dag_gflownet.utils.exhaustive import (
+    get_full_posterior,
+    get_edge_log_features,
+    get_path_log_features,
+    get_markov_blanket_log_features,
+)
 
 
 def main(args):
     if not args.off_wandb:
         wandb.init(
-            project='partial-cliques',
-            group='energy-based',
-            tags=['gnn'],
-            settings=wandb.Settings(start_method='fork')
+            project="partial-cliques",
+            group="energy-based",
+            tags=["gnn"],
+            settings=wandb.Settings(start_method="fork"),
         )
         wandb.config.update(args)
         wandb.run.summary.update(slurm_infos())
@@ -39,62 +52,60 @@ def main(args):
     key = jax.random.PRNGKey(args.seed)
     key, subkey = jax.random.split(key)
 
-
-    # Generate the ground truth data 
-    #TODO: 
+    # Generate the ground truth data
+    # TODO:
     graph, data, _ = get_scorer(args, rng=rng)
     latent_data, obs_data = data
 
     # Create the environment
     # TODO:
-    env = GFlowNetDAGEnv(
-        num_envs=args.num_envs,
-        num_variables=args.num_variables
-    )
+    env = GFlowNetDAGEnv(num_envs=args.num_envs, num_variables=args.num_variables)
 
     # Create the replay buffer
-    replay = ReplayBuffer( # TODO: Modify this so that we store most likely 
-                          # complete trajectories (since the reward is not 
-                          # received at every transition)
+    replay = ReplayBuffer(  # TODO: Modify this so that we store most likely
+        # complete trajectories (since the reward is not
+        # received at every transition)
         args.replay_capacity,
         num_variables=args.num_variables,
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(delta=args.delta) # TODO: 
+    gflownet = DAGGFlowNet(delta=args.delta)  # TODO:
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
         subkey,
         optimizer,
-        replay.dummy['graph'], # TODO: will need to change this depending on the 
+        replay.dummy["graph"],  # TODO: will need to change this depending on the
         # inputs type that we decide to use for the function approximator
-        replay.dummy['mask']
+        replay.dummy["mask"],
     )
-    exploration_schedule = jax.jit(optax.linear_schedule(
-        init_value=jnp.array(0.),
-        end_value=jnp.array(1. - args.min_exploration),
-        transition_steps=args.num_iterations // 2,
-        transition_begin=args.prefill,
-    ))
+    exploration_schedule = jax.jit(
+        optax.linear_schedule(
+            init_value=jnp.array(0.0),
+            end_value=jnp.array(1.0 - args.min_exploration),
+            transition_steps=args.num_iterations // 2,
+            transition_begin=args.prefill,
+        )
+    )
 
     # Training loop
     indices = None
     observations = env.reset()
-    with trange(args.prefill + args.num_iterations, desc='Training') as pbar:
+    with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
             # observations['graph'] = to_graphs_tuple(observations['adjacency'])
             actions, key, logs = gflownet.act(params, key, observations, epsilon)
             next_observations, dones = env.step(np.asarray(actions))
-            indices = replay.add( # TODO: Maybe only need to store an entire 
-                                 # trajectory at the time
+            indices = replay.add(  # TODO: Maybe only need to store an entire
+                # trajectory at the time
                 observations,
                 actions,
-                logs['is_exploration'],
+                logs["is_exploration"],
                 next_observations,
                 dones,
-                prev_indices=indices
+                prev_indices=indices,
             )
             observations = next_observations
 
@@ -106,24 +117,32 @@ def main(args):
                 train_steps = iteration - args.prefill
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
-                        wandb.log({
-                            'replay/num_edges': wandb.Histogram(replay.transitions['num_edges']), # TODO: add more appropriate logs
-                            'replay/is_exploration': np.mean(replay.transitions['is_exploration']),
-                        }, commit=False)
+                        wandb.log(
+                            {
+                                "replay/num_edges": wandb.Histogram(
+                                    replay.transitions["num_edges"]
+                                ),  # TODO: add more appropriate logs
+                                "replay/is_exploration": np.mean(
+                                    replay.transitions["is_exploration"]
+                                ),
+                            },
+                            commit=False,
+                        )
                     if (train_steps + 1) % args.log_every == 0:
-                        wandb.log({
-                            'step': train_steps,
-                            'loss': logs['loss'],
-                            'replay/size': len(replay),
-                            'epsilon': epsilon,
-
-                            'error/mean': jnp.abs(logs['error']).mean(),
-                            'error/max': jnp.abs(logs['error']).max(),
-                        })
+                        wandb.log(
+                            {
+                                "step": train_steps,
+                                "loss": logs["loss"],
+                                "replay/size": len(replay),
+                                "epsilon": epsilon,
+                                "error/mean": jnp.abs(logs["error"]).mean(),
+                                "error/max": jnp.abs(logs["error"]).max(),
+                            }
+                        )
                 pbar.set_postfix(loss=f"{logs['loss']:.2f}", epsilon=f"{epsilon:.2f}")
 
     # Sample from the learned policy
-    # TODO: 
+    # TODO:
     # learned_graphs = sample_from(
     #     gflownet,
     #     params,
@@ -140,7 +159,6 @@ def main(args):
     #     'metrics/edges/mean': expected_edges(posterior),
     #     'metrics/thresholds': threshold_metrics(posterior, ground_truth)
     # })
-
 
     # if (args.graph in ['erdos_renyi_lingauss']) and (args.num_variables < 6):
     #     log_features = get_log_features(posterior, data.columns)
@@ -179,67 +197,120 @@ def main(args):
     # wandb.save('posterior.npy', policy='now')
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from argparse import ArgumentParser
     import json
 
-    parser = ArgumentParser(description='DAG-GFlowNet for Strucure Learning.')
+    parser = ArgumentParser(description="DAG-GFlowNet for Strucure Learning.")
 
     # Environment
-    environment = parser.add_argument_group('Environment')
-    environment.add_argument('--num_envs', type=int, default=8,
-        help='Number of parallel environments (default: %(default)s)')
+    environment = parser.add_argument_group("Environment")
+    environment.add_argument(
+        "--num_envs",
+        type=int,
+        default=8,
+        help="Number of parallel environments (default: %(default)s)",
+    )
 
     # Optimization
-    optimization = parser.add_argument_group('Optimization')
-    optimization.add_argument('--lr', type=float, default=1e-5,
-        help='Learning rate (default: %(default)s)')
-    optimization.add_argument('--delta', type=float, default=1.,
-        help='Value of delta for Huber loss (default: %(default)s)')
-    optimization.add_argument('--batch_size', type=int, default=32,
-        help='Batch size for the number of elements to sample from the replay buffer (default: %(default)s)')
-    optimization.add_argument('--num_iterations', type=int, default=100_000,
-        help='Number of iterations (default: %(default)s)')
+    optimization = parser.add_argument_group("Optimization")
+    optimization.add_argument(
+        "--lr", type=float, default=1e-5, help="Learning rate (default: %(default)s)"
+    )
+    optimization.add_argument(
+        "--delta",
+        type=float,
+        default=1.0,
+        help="Value of delta for Huber loss (default: %(default)s)",
+    )
+    optimization.add_argument(
+        "--batch_size",
+        type=int,
+        default=32,
+        help="Batch size for the number of elements to sample from the replay buffer (default: %(default)s)",
+    )
+    optimization.add_argument(
+        "--num_iterations",
+        type=int,
+        default=100_000,
+        help="Number of iterations (default: %(default)s)",
+    )
 
     # Replay buffer
-    replay = parser.add_argument_group('Replay Buffer')
-    replay.add_argument('--replay_capacity', type=int, default=100_000,
-        help='Capacity of the replay buffer (default: %(default)s)')
-    replay.add_argument('--prefill', type=int, default=1000,
-        help='Number of iterations with a random policy to prefill '
-             'the replay buffer (default: %(default)s)')
-    
+    replay = parser.add_argument_group("Replay Buffer")
+    replay.add_argument(
+        "--replay_capacity",
+        type=int,
+        default=100_000,
+        help="Capacity of the replay buffer (default: %(default)s)",
+    )
+    replay.add_argument(
+        "--prefill",
+        type=int,
+        default=1000,
+        help="Number of iterations with a random policy to prefill "
+        "the replay buffer (default: %(default)s)",
+    )
+
     # Exploration
-    exploration = parser.add_argument_group('Exploration')
-    exploration.add_argument('--min_exploration', type=float, default=0.1,
-        help='Minimum value of epsilon-exploration (default: %(default)s)')
-    
+    exploration = parser.add_argument_group("Exploration")
+    exploration.add_argument(
+        "--min_exploration",
+        type=float,
+        default=0.1,
+        help="Minimum value of epsilon-exploration (default: %(default)s)",
+    )
+
     # Miscellaneous
-    misc = parser.add_argument_group('Miscellaneous')
-    misc.add_argument('--num_learned_samples', type=int, default=1000,
-        help='How many samples to draw from the learned GFN policy for evaluation? (default: %(default)s)')
-    misc.add_argument('--seed', type=int, default=0,
-        help='Random seed (default: %(default)s)')
-    misc.add_argument('--log_every', type=int, default=50,
-        help='Frequency for logging (default: %(default)s)')
-    misc.add_argument('--off_wandb', action='store_true', default=False,
-        help='Whether to use Wandb for logs (default: %(default)s)')
+    misc = parser.add_argument_group("Miscellaneous")
+    misc.add_argument(
+        "--num_learned_samples",
+        type=int,
+        default=1000,
+        help="How many samples to draw from the learned GFN policy for evaluation? (default: %(default)s)",
+    )
+    misc.add_argument(
+        "--seed", type=int, default=0, help="Random seed (default: %(default)s)"
+    )
+    misc.add_argument(
+        "--log_every",
+        type=int,
+        default=50,
+        help="Frequency for logging (default: %(default)s)",
+    )
+    misc.add_argument(
+        "--off_wandb",
+        action="store_true",
+        default=False,
+        help="Whether to use Wandb for logs (default: %(default)s)",
+    )
 
     # Graph
-    graph_args = parser.add_argument_group('Graph')
-    
-    graph_args.add_argument('--num_variables', type=int, required=True,
-        help='Maximum number of latent variables that can be sampled')
-    graph_args.add_argument('--num_edges', type=int, required=True,
-        help='Average number of edges') # TODO: Maybe could replace this with 
-    # average size of a clique, or some other regularization term for the 
+    graph_args = parser.add_argument_group("Graph")
+
+    graph_args.add_argument(
+        "--num_variables",
+        type=int,
+        required=True,
+        help="Maximum number of latent variables that can be sampled",
+    )
+    graph_args.add_argument(
+        "--num_edges", type=int, required=True, help="Average number of edges"
+    )  # TODO: Maybe could replace this with
+    # average size of a clique, or some other regularization term for the
     # potentials
-    graph_args.add_argument('--num_samples', type=int, required=True,
-        help='How many samples to draw for the ground truth observations x?')
-    graph_args.add_argument('--x_dim', type=int, required=True,
-        help='The number of observations variables?')
-    graph_args.add_argument('--h_dim', type=int, required=True,
-        help='The number of latent variables?')
+    graph_args.add_argument(
+        "--num_samples",
+        type=int,
+        required=True,
+        help="How many samples to draw for the ground truth observations x?",
+    )
+    graph_args.add_argument(
+        "--x_dim", type=int, required=True, help="The number of observations variables?"
+    )
+    graph_args.add_argument(
+        "--h_dim", type=int, required=True, help="The number of latent variables?"
+    )
 
     args = parser.parse_args()
 

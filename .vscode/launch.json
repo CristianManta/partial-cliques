@@ -12,6 +12,14 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": ["--off_wandb", "--batch_size", "256", "--num_variables", "5", "--num_samples", "100"]
+        },
+        {
+            "name": "Python: Debug helper fns",
+            "type": "python",
+            "request": "launch",
+            "module": "dag_gflownet.utils.data",
+            "console": "integratedTerminal",
+            "justMyCode": true,
         }
     ]   
 }

@@ -9,23 +9,14 @@ from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 class TestToGraphsTuple:
     @pytest.fixture
     def graphs(self):
-        adjacencies = np.array([
-            [[0, 0, 0],
-             [0, 0, 1],
-             [0, 0, 0]],
-
-            [[0, 0, 0],
-             [0, 0, 0],
-             [0, 0, 0]],
-
-            [[0, 0, 0],
-             [1, 0, 0],
-             [1, 0, 0]],
-
-            [[0, 1, 0],
-             [0, 0, 1],
-             [1, 0, 0]]
-        ])
+        adjacencies = np.array(
+            [
+                [[0, 0, 0], [0, 0, 1], [0, 0, 0]],
+                [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+                [[0, 0, 0], [1, 0, 0], [1, 0, 0]],
+                [[0, 1, 0], [0, 0, 1], [1, 0, 0]],
+            ]
+        )
         return to_graphs_tuple(adjacencies, pad=False)
 
     def test_type(self, graphs):

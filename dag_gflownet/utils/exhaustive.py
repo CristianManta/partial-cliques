@@ -12,6 +12,7 @@ from dag_gflownet.utils.graph import get_markov_blanket_graph
 # https://oeis.org/A003024
 NUM_DAGS = [1, 1, 3, 25, 543, 29281, 3781503]
 
+
 class GraphCollection:
     def __init__(self):
         self.edges, self.lengths = [], []
@@ -25,17 +26,18 @@ class GraphCollection:
     def freeze(self):
         self.edges = np.asarray(self.edges, dtype=np.int_)
         self.lengths = np.asarray(self.lengths, dtype=np.int_)
-        self.mapping = [edge for (edge, _)
-            in sorted(self.mapping.items(), key=lambda x: x[1])]
+        self.mapping = [
+            edge for (edge, _) in sorted(self.mapping.items(), key=lambda x: x[1])
+        ]
         return self
-    
+
     def to_dict(self, prefix=None):
-        prefix = f'{prefix}_' if (prefix is not None) else ''
-        return ({
-            f'{prefix}edges': self.edges,
-            f'{prefix}lengths': self.lengths,
-            f'{prefix}mapping': self.mapping
-        })
+        prefix = f"{prefix}_" if (prefix is not None) else ""
+        return {
+            f"{prefix}edges": self.edges,
+            f"{prefix}lengths": self.lengths,
+            f"{prefix}mapping": self.mapping,
+        }
 
 
 @dataclass
@@ -46,11 +48,13 @@ class FullPosterior:
     markov: GraphCollection
 
     def save(self, filename):
-        with open(filename, 'wb') as f:
-            np.savez(f, log_probas=self.log_probas,
-                **self.graphs.to_dict(prefix='graphs'),
-                **self.closures.to_dict(prefix='closures'),
-                **self.markov.to_dict(prefix='markov')
+        with open(filename, "wb") as f:
+            np.savez(
+                f,
+                log_probas=self.log_probas,
+                **self.graphs.to_dict(prefix="graphs"),
+                **self.closures.to_dict(prefix="closures"),
+                **self.markov.to_dict(prefix="markov"),
             )
 
 
@@ -61,8 +65,9 @@ def get_full_posterior(data, scorer, verbose=True):
     graphs = GraphCollection()
     closures = GraphCollection()
     markov = GraphCollection()
-    with tqdm(estimator.all_dags(), 
-            total=NUM_DAGS[data.shape[1]], disable=(not verbose)) as pbar:
+    with tqdm(
+        estimator.all_dags(), total=NUM_DAGS[data.shape[1]], disable=(not verbose)
+    ) as pbar:
         for graph in pbar:  # Enumerate all possible DAGs
             score = estimator.scoring_method.score(graph)
             log_probas.append(score)
@@ -79,7 +84,7 @@ def get_full_posterior(data, scorer, verbose=True):
         log_probas=log_probas,
         graphs=graphs.freeze(),
         closures=closures.freeze(),
-        markov=markov.freeze()
+        markov=markov.freeze(),
     )
 
 
@@ -97,11 +102,12 @@ def _get_log_features(graphs, log_probas):
         if graphs.lengths[0] == 0:
             has_feat[0] = 0
         assert np.sum(graphs.edges == index) == np.sum(has_feat)
-        
+
         has_feat = has_feat.astype(np.bool_)
         features[edge] = logsumexp(log_probas[has_feat])
 
     return features
+
 
 def get_edge_log_features(posterior):
     return _get_log_features(posterior.graphs, posterior.log_probas)

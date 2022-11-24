@@ -43,16 +43,16 @@ def gflownet(adjacency, mask):
     """
     # Create the edges as pairs of indices (source, target)
     num_variables = adjacency.shape[0]
-    indices = jnp.arange(num_variables ** 2)
+    indices = jnp.arange(num_variables**2)
     sources, targets = jnp.divmod(indices, num_variables)
     edges = jnp.stack((sources, num_variables + targets), axis=1)
 
     # Embedding of the edges
     embeddings = hk.Embed(2 * num_variables, embed_dim=128)(edges)
-    embeddings = embeddings.reshape(num_variables ** 2, -1)
+    embeddings = embeddings.reshape(num_variables**2, -1)
 
     # Reshape the adjacency matrix
-    adjacency = adjacency.reshape(num_variables ** 2, 1)
+    adjacency = adjacency.reshape(num_variables**2, 1)
 
     # Apply common body
     num_layers = 5
@@ -61,9 +61,9 @@ def gflownet(adjacency, mask):
             num_heads=4,
             key_size=64,
             embedding_size=128,
-            init_scale=2. / num_layers,
+            init_scale=2.0 / num_layers,
             widening_factor=2,
-            name=f'body_{i+1}'
+            name=f"body_{i+1}",
         )(embeddings, adjacency)
 
     # Apply individual heads
@@ -82,9 +82,9 @@ def logits_head(embeddings, adjacency):
             num_heads=4,
             key_size=64,
             embedding_size=128,
-            init_scale=2. / num_layers,
+            init_scale=2.0 / num_layers,
             widening_factor=2,
-            name=f'head_logits_{i+1}'
+            name=f"head_logits_{i+1}",
         )(embeddings, adjacency)
 
     logits = hk.nets.MLP([256, 128, 1])(embeddings)
@@ -99,9 +99,9 @@ def stop_head(embeddings, adjacency):
             num_heads=4,
             key_size=64,
             embedding_size=128,
-            init_scale=2. / num_layers,
+            init_scale=2.0 / num_layers,
             widening_factor=2,
-            name=f'head_stop_{i+1}'
+            name=f"head_stop_{i+1}",
         )(embeddings, adjacency)
 
     mean = jnp.mean(embeddings, axis=-2)  # Average over edges

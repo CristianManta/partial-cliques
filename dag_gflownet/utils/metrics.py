@@ -113,57 +113,68 @@ def threshold_metrics(posterior, ground_truth):
     # Expected marginal edge features
     p_edge = np.mean(posterior, axis=0)
     p_edge_flat = p_edge.reshape(-1)
-    
+
     gt_flat = ground_truth.reshape(-1)
 
-    # Threshold metrics 
+    # Threshold metrics
     fpr, tpr, _ = metrics.roc_curve(gt_flat, p_edge_flat)
     roc_auc = metrics.auc(fpr, tpr)
     precision, recall, _ = metrics.precision_recall_curve(gt_flat, p_edge_flat)
     prc_auc = metrics.auc(recall, precision)
     ave_prec = metrics.average_precision_score(gt_flat, p_edge_flat)
-    
+
     return {
-        'fpr': fpr,
-        'tpr': tpr,
-        'roc_auc': roc_auc,
-        'precision': precision,
-        'recall': recall,
-        'prc_auc': prc_auc,
-        'ave_prec': ave_prec,
+        "fpr": fpr,
+        "tpr": tpr,
+        "roc_auc": roc_auc,
+        "precision": precision,
+        "recall": recall,
+        "prc_auc": prc_auc,
+        "ave_prec": ave_prec,
     }
 
-Features = namedtuple('Features', ['edge', 'path', 'markov_blanket'])
+
+Features = namedtuple("Features", ["edge", "path", "markov_blanket"])
+
 
 def get_log_features(posterior, nodes, verbose=True):
     """Compute the log-features for edges, paths & Markov blankets."""
     features = Features(
         edge=defaultdict(float),
         path=defaultdict(float),
-        markov_blanket=defaultdict(float)
+        markov_blanket=defaultdict(float),
     )
     num_samples = posterior.shape[0]
-    for graph in tqdm(adjacencies_to_networkx(posterior, nodes),
-            total=num_samples, disable=(not verbose)):
+    for graph in tqdm(
+        adjacencies_to_networkx(posterior, nodes),
+        total=num_samples,
+        disable=(not verbose),
+    ):
         # Get edge features
         for edge in graph.edges:
-            features.edge[edge] += 1.
+            features.edge[edge] += 1.0
 
         # Get path features
         closure = nx.transitive_closure_dag(graph)
         for edge in closure.edges:
-            features.path[edge] += 1.
+            features.path[edge] += 1.0
 
         # Get Markov blanket features
         mb = get_markov_blanket_graph(graph)
         for edge in mb.edges:
-            features.markov_blanket[edge] += 1.
+            features.markov_blanket[edge] += 1.0
 
     return Features(
-        edge=dict((key, math.log(value) - math.log(num_samples))
-            for (key, value) in features.edge.items()),
-        path=dict((key, math.log(value) - math.log(num_samples))
-            for (key, value) in features.path.items()),
-        markov_blanket=dict((key, math.log(value) - math.log(num_samples))
-            for (key, value) in features.markov_blanket.items())
+        edge=dict(
+            (key, math.log(value) - math.log(num_samples))
+            for (key, value) in features.edge.items()
+        ),
+        path=dict(
+            (key, math.log(value) - math.log(num_samples))
+            for (key, value) in features.path.items()
+        ),
+        markov_blanket=dict(
+            (key, math.log(value) - math.log(num_samples))
+            for (key, value) in features.markov_blanket.items()
+        ),
     )

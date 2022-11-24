@@ -11,7 +11,9 @@ def batch_random_choice(key, probas, masks):
 
     # In rare cases, the sampled actions may be invalid, despite having
     # probability 0. In those cases, we select the stop action by default.
-    stop_mask = jnp.ones((masks.shape[0], 1), dtype=masks.dtype)  # Stop action is always valid
+    stop_mask = jnp.ones(
+        (masks.shape[0], 1), dtype=masks.dtype
+    )  # Stop action is always valid
     masks = masks.reshape(masks.shape[0], -1)
     masks = jnp.concatenate((masks, stop_mask), axis=1)
 

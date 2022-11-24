@@ -162,8 +162,10 @@ def get_value_policy_reward(gfn_state : tuple,
                             clique_potentials : list,
                             K : int):
     '''
-    Given a GFN state and a mutable representation of unfinished cliques,
-    return a mask of eligible variables for the clique selection policy.
+    Given a GFN state, a mutable representation of unfinished cliques,
+    a aligned list of clique potential functions, and the number of values
+    return a new GFN state, an updated representation of unfinished cliques,
+    and a scalar reward.
 
     Inputs
     --------

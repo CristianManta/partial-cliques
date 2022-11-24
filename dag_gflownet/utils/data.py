@@ -159,6 +159,7 @@ def get_clique_selection_mask(gfn_state : tuple,
 
 def get_value_policy_reward(gfn_state : tuple,
                             unobserved_cliques : list,
+                            full_cliques : list,
                             clique_potentials : list,
                             K : int):
     '''
@@ -180,8 +181,12 @@ def get_value_policy_reward(gfn_state : tuple,
     
     unobserved_cliques : list
         A list of sets, where each set correspond to a clique. Each 
-        variable is represented by its index, an integer, Fully observed 
+        variable is represented by its index, an integer. Fully observed 
         and cashed out variables are excluded from these sets.
+    
+    full_cliques : list
+        A list of sets, where each set correspond to a clique. Each 
+        variable is represented by its index, an integer.
     
     clique_potentials : list
         A list of potential functions, each corresponding to a clique.
@@ -204,6 +209,7 @@ def get_value_policy_reward(gfn_state : tuple,
     assert len(np.unique(gfn_state[0])) <= 2
     assert len(np.unique(gfn_state[2])) <= 2
     assert len(unobserved_cliques) == len(clique_potentials)
+    assert len(unobserved_cliques) == len(full_cliques)
     assert np.max(gfn_state[1]) <= K
     
     # we remove fully observed nodes
@@ -218,7 +224,7 @@ def get_value_policy_reward(gfn_state : tuple,
            len(unobserved_cliques[c_ind]) != 0:
             gfn_state[2][np.array(list(unobserved_cliques[c_ind]))] = 0
             reward += \
-                clique_potentials[c_ind](gfn_state[1][np.array(sorted(list(unobserved_cliques[c_ind])))])
+                clique_potentials[c_ind](gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))])
 
     return gfn_state, new_unobserved_cliques, reward
 
@@ -247,20 +253,30 @@ if __name__ == "__main__":
     assert np.all(mask == np.array([0, 1, 1, 0, 0, 0, 0, 0, 0, 0])), mask
 
     # Setting up a list of dummy potential functions
-    clique_potentials = [lambda c : 0.2,
+    clique_potentials = [lambda c : 0.2 if len(c)==7 else np.nan,
                          lambda c : -2]
     gfn_state = (np.array([1, 1, 1, 0, 0, 0, 1, 1, 1, 1]),
                  np.array([1, 1, 0, 2, 2, 2, 0, 1, 0, 1]),
                  np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
     unobserved_cliques = [set([0, 1, 2, 6, 7, 8, 9]),
                           set([3, 4, 5, 6, 7, 8, 9])]
+    full_cliques = [set([0, 1, 2, 6, 7, 8, 9]),
+                          set([3, 4, 5, 6, 7, 8, 9])]
     new_gfn_state, new_unobserved_cliques, reward = \
-        get_value_policy_reward(gfn_state, unobserved_cliques, clique_potentials, K)
+        get_value_policy_reward(gfn_state, 
+                                unobserved_cliques,
+                                full_cliques,
+                                clique_potentials,
+                                K)
     assert reward == 0.2
     assert len(new_unobserved_cliques[0]) == 0
     gfn_state = (np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 1]),
                  np.array([1, 1, 0, 2, 0, 2, 0, 1, 0, 1]),
                  np.array([0, 0, 0, 1, 1, 1, 0, 0, 0, 0]))
     new_gfn_state, new_unobserved_cliques, reward = \
-        get_value_policy_reward(new_gfn_state, new_unobserved_cliques, clique_potentials, K)
+        get_value_policy_reward(new_gfn_state,
+                                new_unobserved_cliques,
+                                full_cliques,
+                                clique_potentials,
+                                K)
     assert reward == 0.

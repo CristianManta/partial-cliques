@@ -64,7 +64,7 @@ def get_data(name, args, rng=default_rng()):
         score = "bde"
 
     elif name == "random_latent_graph":
-        graph, data = get_random_graph(d=args.x_dim, D=ags.h_dim, n=args.num_samples)
+        graph, data = get_random_graph(d=args.x_dim, D=args.h_dim, n=args.num_samples)
         score = None
     else:
         raise ValueError(f"Unknown graph type: {name}")

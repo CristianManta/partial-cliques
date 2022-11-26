@@ -48,7 +48,7 @@ class DAGGFlowNet:
 
         # Example:
         log_probs_clique = self.clique_model.apply(
-            params.clique_model, samples["graphs_tuple"], samples["mask"], K
+            params.clique_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
         # OR
@@ -114,7 +114,7 @@ class DAGGFlowNet:
 
         # Initialize the models
         key1, key2 = random.split(key, 2)
-        clique_params = self.clique_model.init(key1, graph, mask, K)
+        clique_params = self.clique_model.init(key1, graph, mask, x_dim, K)
         value_params = self.value_model.init(key2, graph, mask, x_dim, K)
         params = GFlowNetParameters(
             clique_model=clique_params, value_model=value_params

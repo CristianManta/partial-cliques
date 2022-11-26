@@ -8,6 +8,7 @@ import haiku as hk
 
 from dag_gflownet.utils.jraph_utils import Graph, to_graphs_tuple
 from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy
+from dag_gflownet.utils.data import get_clique_selection_mask
 
 
 @pytest.fixture
@@ -26,26 +27,29 @@ def setup():
         np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
     )
     full_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
+    unobserved_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
 
     graphs = to_graphs_tuple(full_cliques, gfn_state, K, pad=True)
-    masks = jnp.ones((batch_size, h_dim), dtype=int)
-    return graphs, masks, x_dim, K
+    mask = jnp.expand_dims(
+        jnp.array(get_clique_selection_mask(gfn_state, unobserved_cliques, K)), 0
+    )
+    return graphs, mask, x_dim, K
 
 
 def test_clique_policy_shapes_jit(setup):
-    graphs, masks, _, K = setup
+    graphs, masks, x_dim, K = setup
     seed = 0
     key = random.PRNGKey(seed)
 
     # Initializing the model
     model = hk.without_apply_rng(hk.transform(clique_policy))
-    params = model.init(key, graphs, masks, K)
+    params = model.init(key, graphs, masks, x_dim, K)
 
     # Applying the model
-    forward = jax.jit(model.apply, static_argnums=(3,))
-    log_policy_cliques = forward(params, graphs, masks, K)
+    forward = jax.jit(model.apply, static_argnums=(3, 4))
+    log_policy_cliques = forward(params, graphs, masks, x_dim, K)
 
-    assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] + 1)
+    assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] - x_dim + 1)
 
 
 def test_value_policy_shapes_jit(setup):

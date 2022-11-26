@@ -9,7 +9,7 @@ from jax import lax, nn, jit
 from dag_gflownet.utils.gflownet import log_policy_cliques
 
 
-def clique_policy(graphs, masks, K):
+def clique_policy(graphs, masks, x_dim, K):
     """
     Parameters
     ----------
@@ -21,12 +21,14 @@ def clique_policy(graphs, masks, K):
         The distinction between the two elements in the tuple is that the first
         element encodes in the node features the node identities, while the
         second element encodes the node values (which are discrete).
-    masks: np.ndarray of shape (batch_size, h_dim)
+    masks: np.ndarray of shape (batch_size, h_dim+x_dim)
         Batch of masks to prevent a given node from being sampled twice by the clique policy.
         In addition, we also mask the nodes which are not part of a current incomplete
         clique. masks[i, j] = 0 iff node j from batch i is unavailable
         for sampling at this step. h_dim is the maximal number of nodes to sample from.
         It corresponds to the number of latent nodes in the ground truth graph in our setting.
+    x_dim: int
+        Number of low-level variables.
     K: int
         Number of different discrete values that the nodes can take.
 
@@ -38,12 +40,11 @@ def clique_policy(graphs, masks, K):
         Log probabilities for each possible action, including the stop action
     """
 
-    if K != 2:
-        raise NotImplementedError(
-            "Some assumptions are made about k = 2 in this code. Need to re-write some parts for general k."
-        )
+    assert K == 2
 
-    batch_size, h_dim = masks.shape
+    batch_size, num_variables = masks.shape
+    h_dim = num_variables - x_dim
+    masks = masks[:, :h_dim]
 
     # Embedding of the nodes & edges
     node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=128)
@@ -127,7 +128,7 @@ def value_policy(graphs, masks, x_dim, K):
         The distinction between the two elements in the tuple is that the first
         element encodes in the node features the node identities, while the
         second element encodes the node values (which are discrete).
-    masks: np.ndarray of shape (batch_size, h_dim)
+    masks: np.ndarray of shape (batch_size, h_dim+x_dim)
         Batch of masks to prevent a given node from being sampled twice by the clique policy.
         In addition, we also mask the nodes which are not part of a current incomplete
         clique. masks[i, j] = 0 iff node j from batch i is unavailable
@@ -148,13 +149,11 @@ def value_policy(graphs, masks, x_dim, K):
         Estimated log flow passing through the current state.
     """
 
-    if K != 2:
-        raise NotImplementedError(
-            "Some assumptions are made about k = 2 in this code. Need to re-write some parts for general k."
-        )
+    assert K == 2
 
-    batch_size, h_dim = masks.shape
-    num_variables = h_dim + x_dim
+    batch_size, num_variables = masks.shape
+    h_dim = num_variables - x_dim
+    masks = masks[:, :h_dim]
     current_sampling_feature = num_variables + K + 1
 
     # Embedding of the nodes & edges

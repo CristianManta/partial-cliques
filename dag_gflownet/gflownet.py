@@ -30,7 +30,7 @@ class DAGGFlowNet:
         loss (in place of the L2 loss) to avoid gradient explosion.
     """
 
-    def __init__(self, delta=1.0):
+    def __init__(self, clique_potentials, delta=1.0):
 
         clique_model = clique_policy
         value_model = value_policy
@@ -38,6 +38,7 @@ class DAGGFlowNet:
         self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
         self.value_model = hk.without_apply_rng(hk.transform(value_model))
         self.delta = delta
+        self.clique_potentials = clique_potentials
 
         self._optimizer = None
 

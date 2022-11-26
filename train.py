@@ -14,7 +14,7 @@ from dag_gflownet.env import GFlowNetDAGEnv
 from dag_gflownet.gflownet import DAGGFlowNet
 from dag_gflownet.utils.replay_buffer import ReplayBuffer
 from dag_gflownet.utils.factories import get_scorer
-from dag_gflownet.utils.data import get_data
+from dag_gflownet.utils.data import get_data, get_potential_fns
 from dag_gflownet.utils.gflownet import posterior_estimate
 from dag_gflownet.utils.metrics import (
     expected_shd,
@@ -54,8 +54,10 @@ def main(args):
 
     # Generate the ground truth data
     # TODO:
-    graph, data, _ = get_scorer(args, rng=rng)
-    latent_data, obs_data = data
+    graph, _, _ = get_scorer(args, rng=rng)
+    # latent_data, obs_data = data
+    graph_ugm, full_cliques = graph
+    clique_potentials = get_potential_fns(graph_ugm, full_cliques)
 
     # Create the environment
     # TODO:
@@ -67,7 +69,7 @@ def main(args):
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(delta=args.delta)
+    gflownet = DAGGFlowNet(delta=args.delta, clique_potentials=clique_potentials)
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
         subkey,

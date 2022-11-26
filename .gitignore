@@ -133,3 +133,6 @@ dmypy.json
 !/data/.gitkeep
 /wandb/
 /tmp/
+
+# Workspace settings (vscode)
+settings.json

@@ -41,17 +41,19 @@ class DAGGFlowNet:
 
         self._optimizer = None
 
-    def loss(self, params, samples):  # TODO: Need to know how the samples look like
+    def loss(
+        self, params, samples, x_dim, K
+    ):  # TODO: Need to know how the samples look like
         # Then evaluate the models to obtain its log-probs
 
         # Example:
         log_probs_clique = self.clique_model.apply(
-            params.clique_model, samples["graphs_tuple"], samples["mask"]
+            params.clique_model, samples["graphs_tuple"], samples["mask"], K
         )
 
         # OR
         log_probs_values, value_log_flows = self.value_model.apply(
-            params.value_model, samples["graphs_tuple"], samples["mask"]
+            params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
         # ...
@@ -68,8 +70,8 @@ class DAGGFlowNet:
         # TODO:
         raise NotImplementedError
 
-    @partial(jit, static_argnums=(0,))
-    def act(self, params, key, observations, epsilon):
+    @partial(jit, static_argnums=(0, 5, 6))
+    def act(self, params, key, observations, epsilon, x_dim, K):
         # masks = observations['mask'].astype(jnp.float32)
         # graphs = observations['graph']
         # batch_size = masks.shape[0]
@@ -96,9 +98,9 @@ class DAGGFlowNet:
         # TODO:
         raise NotImplementedError
 
-    @partial(jit, static_argnums=(0,))
-    def step(self, params, state, samples):
-        grads, logs = grad(self.loss, has_aux=True)(params, samples)
+    @partial(jit, static_argnums=(0, 4, 5))
+    def step(self, params, state, samples, x_dim, K):
+        grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 
         # Update the online params
         updates, state = self.optimizer.update(grads, state, params)
@@ -106,14 +108,14 @@ class DAGGFlowNet:
 
         return (params, state, logs)
 
-    def init(self, key, optimizer, graph, mask):
+    def init(self, key, optimizer, graph, mask, x_dim, K):
         # Set the optimizer
         self._optimizer = optax.chain(optimizer, optax.zero_nans())
 
         # Initialize the models
         key1, key2 = random.split(key, 2)
-        clique_params = self.clique_model.init(key1, graph, mask)
-        value_params = self.value_model.init(key2, graph, mask)
+        clique_params = self.clique_model.init(key1, graph, mask, K)
+        value_params = self.value_model.init(key2, graph, mask, x_dim, K)
         params = GFlowNetParameters(
             clique_model=clique_params, value_model=value_params
         )

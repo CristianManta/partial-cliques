@@ -74,6 +74,8 @@ def main(args):
         optimizer,
         replay.dummy["graph"],
         replay.dummy["mask"],
+        args.x_dim,
+        args.K,
     )
     exploration_schedule = jax.jit(
         optax.linear_schedule(
@@ -93,7 +95,7 @@ def main(args):
             epsilon = exploration_schedule(iteration)
             observations["graphs_tuple"] = to_graphs_tuple(observations["gfn_state"])
             actions, key, logs = gflownet.act(
-                params, key, observations, epsilon
+                params, key, observations, epsilon, args.x_dim, args.K
             )  # TODO:
             next_observations, dones = env.step(np.asarray(actions))
             indices = replay.add(  # TODO:
@@ -109,7 +111,9 @@ def main(args):
             if iteration >= args.prefill:
                 # Update the parameters of the GFlowNet
                 samples = replay.sample(batch_size=args.batch_size, rng=rng)
-                params, state, logs = gflownet.step(params, state, samples)
+                params, state, logs = gflownet.step(
+                    params, state, samples, args.x_dim, args.K
+                )
 
                 train_steps = iteration - args.prefill
                 if not args.off_wandb:
@@ -296,6 +300,12 @@ if __name__ == "__main__":
     )
     graph_args.add_argument(
         "--h_dim", type=int, required=True, help="The number of latent variables?"
+    )
+    graph_args.add_argument(
+        "--K",
+        type=int,
+        required=True,
+        help="The number of discrete values that the variables can take?",
     )
 
     args = parser.parse_args()

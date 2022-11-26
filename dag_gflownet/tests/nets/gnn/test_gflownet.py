@@ -42,9 +42,8 @@ def test_clique_policy_shapes_jit(setup):
     params = model.init(key, graphs, masks, K)
 
     # Applying the model
-    log_policy_cliques = jax.jit(model.apply, static_argnums=(3,))(
-        params, graphs, masks, K
-    )
+    forward = jax.jit(model.apply, static_argnums=(3,))
+    log_policy_cliques = forward(params, graphs, masks, K)
 
     assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] + 1)
 
@@ -59,9 +58,8 @@ def test_value_policy_shapes_jit(setup):
     params = model.init(key, graphs, masks, x_dim, K)
 
     # Applying the model
-    log_policy_values, log_flows = jax.jit(model.apply, static_argnums=(3, 4))(
-        params, graphs, masks, x_dim, K
-    )
+    forward = jax.jit(model.apply, static_argnums=(3, 4))
+    log_policy_values, log_flows = forward(params, graphs, masks, x_dim, K)
 
     assert log_policy_values.shape == (masks.shape[0],)
     assert log_flows.shape == (masks.shape[0],)

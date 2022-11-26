@@ -1,33 +1,97 @@
 import numpy as np
+import jax
+import jax.numpy as jnp
 import jraph
 from collections import namedtuple
+from itertools import permutations
 
 Graph = namedtuple("Graph", ["structure", "values"])
 
 
-def to_graphs_tuple(adjacencies, pad=True):
-    num_graphs, num_variables = adjacencies.shape[:2]
-    n_node = np.full((num_graphs,), num_variables, dtype=np.int_)
+def to_graphs_tuple(
+    full_cliques: list, gfn_state: tuple, K: int, pad: bool = True
+) -> Graph:
+    """Converts a tuple representation of the GFN state into a `Graph` object
+    compatible with the input type of the clique and value policies.
 
-    counts, senders, receivers = np.nonzero(adjacencies)
-    n_edge = np.bincount(counts, minlength=num_graphs)
+    Parameters
+    ----------
+    full_cliques: list
+        A list of sets, where each set correspond to a clique. Each
+        variable is represented by its index, an integer.
+    gfn_state : tuple
+        There are three iterables of the same length (N) in this tuple.
+        The first iterable is binary and denotes observed variables.
+        The second iteration can take on K+1 values and denote the
+        if a value has been sampled for each observed variable, and
+        if so, what that value is.
+        The third iterable is binary and denotes if a variable has
+        never been cashed out as a part of a reward term.
+    K : int
+        The number of possible values.
+    pad : bool, optional
+        Whether to pad the resulting graphs in `Graph` with zeroes
+        to guarantee a fixed size and prevent re-compilation of the
+        clique and value policies, by default True.
 
-    # Node features: node indices
-    nodes = np.tile(np.arange(num_variables), num_graphs)
-    edges = np.ones_like(senders)
-
-    graphs_tuple = jraph.GraphsTuple(
-        nodes=nodes,
-        edges=edges,
-        senders=senders + counts * num_variables,
-        receivers=receivers + counts * num_variables,
-        globals=None,
-        n_node=n_node,
-        n_edge=n_edge,
+    Returns
+    -------
+    Graph
+        Representation of the state containing the two GraphsTuples:
+        one for the values and one for the structure.
+    """
+    num_nodes = gfn_state[0].shape[0]
+    structure_node_features = np.arange(num_nodes)
+    structure_node_features = np.where(
+        gfn_state[0] == 0, num_nodes + K + 1, structure_node_features
     )
-    if pad:
-        graphs_tuple = pad_graph_to_nearest_power_of_two(graphs_tuple)
-    return graphs_tuple
+
+    edges = []
+    for clique in full_cliques:
+        clique_edges = permutations(clique, r=2)
+        edges.extend(clique_edges)
+
+    """
+    Filtering out duplicate edges, which can happen if two cliques have edges in common. 
+    Then sorting in ascending order of senders.
+    """
+    edges = list(set(edges))
+    edges.sort(key=lambda x: x[0])
+    senders, receivers = zip(*edges)
+
+    edge_features = np.ones_like(senders)
+
+    structure_graph = jraph.GraphsTuple(
+        nodes=structure_node_features,
+        edges=edge_features,
+        senders=np.array(senders),
+        receivers=np.array(receivers),
+        globals=None,
+        n_node=np.array([num_nodes]),
+        n_edge=np.array([len(edges)]),
+    )
+
+    """
+    Values need to have distinct embeddings than positions. Hence we shift 
+    everything by num_nodes
+    """
+    value_node_features = np.array(gfn_state[1]) + num_nodes
+    value_graph = jraph.GraphsTuple(
+        nodes=value_node_features,
+        edges=edge_features,
+        senders=np.array(senders),
+        receivers=np.array(receivers),
+        globals=None,
+        n_node=np.array([num_nodes]),
+        n_edge=np.array([len(edges)]),
+    )
+    if (
+        pad
+    ):  # Necessary to avoid changing shapes too often, which triggers jax re-compilation
+        structure_graph = pad_graph_to_nearest_power_of_two(structure_graph)
+        value_graph = pad_graph_to_nearest_power_of_two(value_graph)
+
+    return Graph(structure=structure_graph, values=value_graph)
 
 
 def _nearest_bigger_power_of_two(x):

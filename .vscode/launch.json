@@ -10,8 +10,23 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
+            "autoReload": {
+                "enable": true
+              },            
             "args": ["--off_wandb", "--batch_size", "256", "--num_variables", "5", "--num_samples", "100"]
+        },
+        {
+            "name": "Python: Debug tests",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "autoReload": {
+                "enable": true
+              },
+            "purpose": ["debug-test"]            
         },
         {
             "name": "Python: Debug helper fns",

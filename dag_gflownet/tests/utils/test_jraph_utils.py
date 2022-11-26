@@ -1,53 +1,49 @@
 import pytest
 import numpy as np
+from jax import jit
+import jax.numpy as jnp
 
 from jraph import GraphsTuple
 
 from dag_gflownet.utils.jraph_utils import to_graphs_tuple
 
 
-class TestToGraphsTuple:
-    @pytest.fixture
-    def graphs(self):
-        adjacencies = np.array(
-            [
-                [[0, 0, 0], [0, 0, 1], [0, 0, 0]],
-                [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-                [[0, 0, 0], [1, 0, 0], [1, 0, 0]],
-                [[0, 1, 0], [0, 0, 1], [1, 0, 0]],
-            ]
-        )
-        return to_graphs_tuple(adjacencies, pad=False)
+# def test_to_graphs_tuple_jit():
+#     K = 2
+#     # Setting up a dummy GFN state
+#     # Assuming that we have 10 variables, x_0^3 and h_0^5
+#     # We have two cliques {x_0^3, h_0^2} and {x_0^3, h_3^5}
+#     # We have only fully observed x_0^3 and h_0
+#     gfn_state = (
+#         jnp.array([1, 0, 0, 0, 0, 0, 1, 1, 1, 1]),
+#         jnp.array([1, 2, 2, 2, 2, 2, 0, 1, 0, 1]),
+#         jnp.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+#     )
 
-    def test_type(self, graphs):
-        assert isinstance(graphs, GraphsTuple)
+#     result = jit(to_graphs_tuple)(gfn_state, K, pad=True)
+#     pass
 
-    def test_n_node(self, graphs):
-        assert graphs.n_node.shape == (4,)
-        expected_n_node = np.array([3, 3, 3, 3], dtype=np.int_)
-        np.testing.assert_array_equal(graphs.n_node, expected_n_node)
 
-    def test_n_edge(self, graphs):
-        assert graphs.n_edge.shape == (4,)
-        expected_n_edge = np.array([1, 0, 2, 3], dtype=np.int_)
-        np.testing.assert_array_equal(graphs.n_edge, expected_n_edge)
+def test_to_graphs_tuple_concrete():
+    K = 2
+    # Setting up a dummy GFN state
+    # Assuming that we have 10 variables, x_0^3 and h_0^5
+    # We have two cliques {x_0^3, h_0^2} and {x_0^3, h_3^5}
+    # We have only fully observed x_0^3 and h_0
+    gfn_state = (
+        np.array([1, 0, 0, 0, 0, 0, 1, 1, 1, 1]),
+        np.array([1, 2, 2, 2, 2, 2, 0, 1, 0, 1]),
+        np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+    )
+    full_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
 
-    def test_nodes(self, graphs):
-        assert graphs.nodes.shape == (12,)
-        expected_nodes = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2], dtype=np.int_)
-        np.testing.assert_array_equal(graphs.nodes, expected_nodes)
+    result = to_graphs_tuple(full_cliques, gfn_state, K, pad=True)
 
-    def test_edges(self, graphs):
-        assert graphs.edges.shape == (6,)
-        expected_edges = np.ones((6,), dtype=np.int_)
-        np.testing.assert_array_equal(graphs.edges, expected_edges)
-
-    def test_senders(self, graphs):
-        assert graphs.senders.shape == (6,)
-        expected_senders = np.array([1, 7, 8, 9, 10, 11], dtype=np.int_)
-        np.testing.assert_array_equal(graphs.senders, expected_senders)
-
-    def test_receivers(self, graphs):
-        assert graphs.receivers.shape == (6,)
-        expected_receivers = np.array([2, 6, 6, 10, 11, 9], dtype=np.int_)
-        np.testing.assert_array_equal(graphs.receivers, expected_receivers)
+    np.testing.assert_array_equal(result.structure.n_node, np.array([10, 7]))
+    np.testing.assert_array_equal(result.values.n_node, np.array([10, 7]))
+    np.testing.assert_array_equal(result.structure.n_edge, np.array([72, 56]))
+    np.testing.assert_array_equal(result.values.n_edge, np.array([72, 56]))
+    assert len(result.structure.nodes) == 17
+    assert len(result.values.nodes) == 17
+    assert len(result.structure.edges) == 128
+    assert len(result.values.edges) == 128

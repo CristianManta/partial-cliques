@@ -54,14 +54,20 @@ def main(args):
 
     # Generate the ground truth data
     # TODO:
-    graph, _, _ = get_scorer(args, rng=rng)
+    graph, _, _ = get_data("random_latent_graph", args, rng=rng)
     # latent_data, obs_data = data
-    graph_ugm, full_cliques = graph
-    clique_potentials = get_potential_fns(graph_ugm, full_cliques)
+    true_ugm, full_cliques = graph
+    clique_potentials = get_potential_fns(true_ugm, full_cliques)
 
     # Create the environment
     # TODO:
-    env = GFlowNetDAGEnv(num_envs=args.num_envs, h_dim=args.h_dim, x_dim=args.x_dim)
+    env = GFlowNetDAGEnv(
+        num_envs=args.num_envs,
+        h_dim=args.h_dim,
+        x_dim=args.x_dim,
+        K=args.K,
+        graph=true_ugm,
+    )
 
     # Create the replay buffer
     replay = ReplayBuffer(  # TODO: Implement replay buffer
@@ -69,7 +75,9 @@ def main(args):
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(delta=args.delta, clique_potentials=clique_potentials)
+    gflownet = DAGGFlowNet(
+        delta=args.delta, clique_potentials=clique_potentials, full_cliques=full_cliques
+    )
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
         subkey,

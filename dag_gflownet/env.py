@@ -10,7 +10,7 @@ from dag_gflownet.utils.cache import LRUCache
 
 
 class GFlowNetDAGEnv(gym.vector.VectorEnv):
-    def __init__(self, num_envs, h_dim, x_dim):
+    def __init__(self, num_envs, h_dim, x_dim, K, graph):
         """GFlowNet environment for learning a distribution over DAGs.
 
         Parameters
@@ -23,23 +23,25 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
 
         x_dim: int
             Number of low-level variables.
+
+        graph: MarkovNetwork
+            The ground truth UGM.
         """
 
         self._state = None
         self.h_dim = h_dim
         self.x_dim = x_dim
+        self.K = K
         self.num_variables = h_dim + x_dim
+        self.graph = graph
 
-        # TODO: Change this to contain (name, value) tuples
-        # observation_space = Dict({
-        #     'adjacency': Box(low=0., high=1., shape=shape, dtype=np.int_),
-        #     'mask': Box(low=0., high=1., shape=shape, dtype=np.int_),
-        #     'num_edges': Discrete(max_edges),
-        #     'score': Box(low=-np.inf, high=np.inf, shape=(), dtype=np.float_),
-        #     'order': Box(low=-1, high=max_edges, shape=shape, dtype=np.int_)
-        # })
-        # action_space = Discrete(self.num_variables ** 2 + 1) # TODO: Also need to change this
-        observation_space, action_space = (None, None)
+        # TODO: Change this to the appropriate obs space
+        observation_space = Dict(
+            {
+                "something": Box(low=0.0, high=1.0, shape=(1,), dtype=np.int_),
+            }
+        )
+        action_space = Discrete(self.num_variables * self.K)
         super().__init__(num_envs, observation_space, action_space)
 
     def reset(self):
@@ -47,7 +49,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         observed[self.h_dim :] = 1
         gfn_state = (
             observed,
-            None,  # TODO: Need to know the values of x to fill this
+            None,  # TODO: Extract the values of x from self.graph
             np.ones(self.num_variables, dtype=int),
         )
         self._state = {

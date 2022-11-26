@@ -8,8 +8,12 @@ from jax import grad, random, jit
 from collections import namedtuple
 
 from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy
-from dag_gflownet.utils.gflownet import uniform_log_policy, detailed_balance_loss
+from dag_gflownet.utils.gflownet import (
+    uniform_log_policy,
+    detailed_balance_loss_free_energy_to_go,
+)
 from dag_gflownet.utils.jnp_utils import batch_random_choice
+from dag_gflownet.utils.data import get_value_policy_reward
 
 GFlowNetParameters = namedtuple("GFlowNetParameters", ["clique_model", "value_model"])
 
@@ -30,7 +34,7 @@ class DAGGFlowNet:
         loss (in place of the L2 loss) to avoid gradient explosion.
     """
 
-    def __init__(self, clique_potentials, delta=1.0):
+    def __init__(self, clique_potentials, full_cliques, delta=1.0):
 
         clique_model = clique_policy
         value_model = value_policy
@@ -39,6 +43,7 @@ class DAGGFlowNet:
         self.value_model = hk.without_apply_rng(hk.transform(value_model))
         self.delta = delta
         self.clique_potentials = clique_potentials
+        self.full_cliques = full_cliques
 
         self._optimizer = None
 
@@ -57,19 +62,37 @@ class DAGGFlowNet:
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        # ...
+        log_pf = log_probs_clique + log_probs_values
+        # TODO: calculate PB for every sample by looking at how many variables are in them
+        log_pb = None
+        log_fetg_t = value_log_flows
+        # TODO: calculate the fetg for s_{t+1}
+        log_fetg_tp1 = None
 
-        # TODO: Add custom loss here
-        # return detailed_balance_loss(
-        #     log_pi_t,
-        #     log_pi_tp1,
-        #     samples['actions'],
-        #     samples['delta_scores'],
-        #     samples['num_edges'],
-        #     delta=self.delta
-        # )
-        # TODO:
-        raise NotImplementedError
+        # ...
+        partial_rewards = []
+        for sample in samples:
+            # TODO: extract gfn_state (a 3-tuple) and unobserved_cliques from sample
+            gfn_state = None
+            unobserved_cliques = None
+            partial_rewards.append(
+                get_value_policy_reward(
+                    gfn_state,
+                    unobserved_cliques,
+                    self.full_cliques,
+                    self.clique_potentials,
+                )
+            )
+        partial_rewards = jnp.array(partial_rewards)
+
+        return detailed_balance_loss_free_energy_to_go(
+            log_fetg_t=log_fetg_t,
+            log_fetg_tp1=log_fetg_tp1,
+            log_pf=log_pf,
+            log_pb=log_pb,
+            partial_rewards=partial_rewards,
+            delta=self.delta,
+        )
 
     @partial(jit, static_argnums=(0, 5, 6))
     def act(self, params, key, observations, epsilon, x_dim, K):

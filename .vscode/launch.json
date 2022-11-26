@@ -35,6 +35,18 @@
             "module": "dag_gflownet.utils.data",
             "console": "integratedTerminal",
             "justMyCode": true,
+        },
+        {
+            "name": "Python: train.py",
+            "type": "python",
+            "request": "launch",
+            "program": "./train.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args":["--num_samples", "1",
+                    "--x_dim", "4",
+                    "--h_dim", "8",
+                    "--K", "2"]
         }
     ]   
 }

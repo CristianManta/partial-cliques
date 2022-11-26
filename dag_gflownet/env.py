@@ -49,7 +49,6 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             observed,
             None,  # TODO: Need to know the values of x to fill this
             np.ones(self.num_variables, dtype=int),
-            self.x_dim,
         )
         self._state = {
             "gfn_state": gfn_state,

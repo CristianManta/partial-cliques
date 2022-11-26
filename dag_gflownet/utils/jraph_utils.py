@@ -37,13 +37,16 @@ def to_graphs_tuple(
         A list of sets, where each set correspond to a clique. Each
         variable is represented by its index, an integer.
     gfn_state : tuple
-        There are three iterables of the same length (N) in this tuple.
+        There are three iterables of the same length (N) in this tuple
+        and an additional integer.
         The first iterable is binary and denotes observed variables.
         The second iteration can take on K+1 values and denote the
         if a value has been sampled for each observed variable, and
         if so, what that value is.
         The third iterable is binary and denotes if a variable has
         never been cashed out as a part of a reward term.
+        The fourth element is an integer indicating how many x variables
+        there are among the N nodes.
     K : int
         The number of possible values.
     pad : bool, optional

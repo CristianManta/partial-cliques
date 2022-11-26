@@ -119,13 +119,16 @@ def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int
     Inputs
     --------
     gfn_state : tuple
-        There are three iterables of the same length (N) in this tuple.
+        There are three iterables of the same length (N) in this tuple
+        and an additional integer.
         The first iterable is binary and denotes observed variables.
         The second iteration can take on K+1 values and denote the
         if a value has been sampled for each observed variable, and
         if so, what that value is.
         The third iterable is binary and denotes if a variable has
         never been cashed out as a part of a reward term.
+        The fourth element is an integer indicating how many x variables
+        there are among the N nodes.
 
     unobserved_cliques : list
         A list of sets, where each set correspond to a clique. Each
@@ -176,13 +179,16 @@ def get_value_policy_reward(
     Inputs
     --------
     gfn_state : tuple
-        There are three iterables of the same length (N) in this tuple.
+        There are three iterables of the same length (N) in this tuple
+        and an additional integer.
         The first iterable is binary and denotes observed variables.
         The second iteration can take on K+1 values and denote the
         if a value has been sampled for each observed variable, and
         if so, what that value is.
         The third iterable is binary and denotes if a variable has
         never been cashed out as a part of a reward term.
+        The fourth element is an integer indicating how many x variables
+        there are among the N nodes.
 
     unobserved_cliques : list
         A list of sets, where each set correspond to a clique. Each
@@ -254,6 +260,7 @@ if __name__ == "__main__":
         np.array([1, 0, 0, 0, 0, 0, 1, 1, 1, 1]),
         np.array([1, 2, 2, 2, 2, 2, 0, 1, 0, 1]),
         np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+        4,
     )
     unobserved_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
 
@@ -266,6 +273,7 @@ if __name__ == "__main__":
         np.array([1, 1, 1, 0, 0, 0, 1, 1, 1, 1]),
         np.array([1, 1, 0, 2, 2, 2, 0, 1, 0, 1]),
         np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+        4,
     )
     unobserved_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
     full_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
@@ -278,6 +286,7 @@ if __name__ == "__main__":
         np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 1]),
         np.array([1, 1, 0, 2, 0, 2, 0, 1, 0, 1]),
         np.array([0, 0, 0, 1, 1, 1, 0, 0, 0, 0]),
+        4,
     )
     new_gfn_state, new_unobserved_cliques, reward = get_value_policy_reward(
         new_gfn_state, new_unobserved_cliques, full_cliques, clique_potentials, K

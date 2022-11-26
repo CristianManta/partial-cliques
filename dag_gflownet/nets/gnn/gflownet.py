@@ -2,13 +2,14 @@ import jax.numpy as jnp
 import haiku as hk
 import jraph
 import math
+from functools import partial
 
-from jax import lax, nn
+from jax import lax, nn, jit
 
 from dag_gflownet.utils.gflownet import log_policy_cliques
 
 
-def clique_policy(graphs, masks):
+def clique_policy(graphs, masks, K):
     """
     Parameters
     ----------
@@ -20,32 +21,32 @@ def clique_policy(graphs, masks):
         The distinction between the two elements in the tuple is that the first
         element encodes in the node features the node identities, while the
         second element encodes the node values (which are discrete).
-    masks: np.ndarray of shape (batch_size, max_nodes)
+    masks: np.ndarray of shape (batch_size, h_dim)
         Batch of masks to prevent a given node from being sampled twice by the clique policy.
         In addition, we also mask the nodes which are not part of a current incomplete
         clique. masks[i, j] = 0 iff node j from batch i is unavailable
-        for sampling at this step. max_nodes is the maximal number of nodes to sample from.
-        In our current setting, it corresponds to the number of nodes in the ground truth graph.
+        for sampling at this step. h_dim is the maximal number of nodes to sample from.
+        It corresponds to the number of latent nodes in the ground truth graph in our setting.
+    K: int
+        Number of different discrete values that the nodes can take.
+
 
     Returns
     -------
     log_policy_cliques: jnp.DeviceArray of shape (batch_size, num_actions) =
-    (batch_size, max_nodes + 1)
+    (batch_size, h_dim + 1)
         Log probabilities for each possible action, including the stop action
     """
 
-    ############ Hardcoded params for JAX ease of debugging
-    k = 2  # Number of different discrete values that the nodes can take.
-    if k != 2:
+    if K != 2:
         raise NotImplementedError(
             "Some assumptions are made about k = 2 in this code. Need to re-write some parts for general k."
         )
-    #####################################
 
-    batch_size, max_nodes = masks.shape
+    batch_size, h_dim = masks.shape
 
     # Embedding of the nodes & edges
-    node_embeddings_list = hk.Embed(max_nodes + k + 2, embed_dim=128)
+    node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=128)
     """
     + 2 because we need to reserve a special embedding for: 
     1) the (target) node with the missing value (to be sampled),     
@@ -103,7 +104,7 @@ def clique_policy(graphs, masks):
     # )(queries, keys, values)
 
     # node_features = node_features.reshape(batch_size, -1)
-    logits = hk.nets.MLP([128, 128, 128, max_nodes], name="logits")(
+    logits = hk.nets.MLP([128, 128, 128, h_dim], name="logits")(
         global_features
     )  # Maybe 3 layers is too much. Can try different things here. Alternative: can try using node_features instead.
     stop = hk.nets.MLP([128, 1], name="stop")(global_features)
@@ -114,7 +115,7 @@ def clique_policy(graphs, masks):
     return log_policy_cliques(logits / temperature, stop, masks)
 
 
-def value_policy(graphs, masks):
+def value_policy(graphs, masks, x_dim, K):
     """
     Parameters
     ----------
@@ -126,12 +127,17 @@ def value_policy(graphs, masks):
         The distinction between the two elements in the tuple is that the first
         element encodes in the node features the node identities, while the
         second element encodes the node values (which are discrete).
-    masks: np.ndarray of shape (batch_size, max_nodes)
+    masks: np.ndarray of shape (batch_size, h_dim)
         Batch of masks to prevent a given node from being sampled twice by the clique policy.
         In addition, we also mask the nodes which are not part of a current incomplete
         clique. masks[i, j] = 0 iff node j from batch i is unavailable
-        for sampling at this step. max_nodes is the maximal number of nodes to sample from.
+        for sampling at this step. h_dim is the maximal number of nodes to sample from.
         In our current setting, it corresponds to the number of nodes in the ground truth graph.
+    x_dim: int
+        Number of low-level variables.
+    K: int
+        Number of different discrete values that the nodes can take.
+
 
     Returns
     -------
@@ -142,19 +148,17 @@ def value_policy(graphs, masks):
         Estimated log flow passing through the current state.
     """
 
-    ############ Hardcoded params for JAX ease of debugging
-    k = 2  # Number of different discrete values that the nodes can take.
-    if k != 2:
+    if K != 2:
         raise NotImplementedError(
             "Some assumptions are made about k = 2 in this code. Need to re-write some parts for general k."
         )
-    #####################################
 
-    batch_size, max_nodes = masks.shape
-    current_sampling_feature = max_nodes + k
+    batch_size, h_dim = masks.shape
+    num_variables = h_dim + x_dim
+    current_sampling_feature = num_variables + K + 1
 
     # Embedding of the nodes & edges
-    node_embeddings_list = hk.Embed(max_nodes + k + 2, embed_dim=128)
+    node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=128)
     """
     + 2 because we need to reserve a special embedding for: 
     1) the (target) node with the missing value (to be sampled),     
@@ -196,7 +200,7 @@ def value_policy(graphs, masks):
     )
     features = graph_net(graphs_tuple)
 
-    node_features = features.nodes[: batch_size * max_nodes]
+    node_features = features.nodes[: batch_size * num_variables]
     global_features = features.globals[:batch_size]
 
     # Project the nodes features into keys, queries & values
@@ -213,14 +217,14 @@ def value_policy(graphs, masks):
     )  # Assumption that k = 2 here (last layer)
     all_logits = jnp.squeeze(all_logits)
     targets = (
-        graphs.values.nodes[: batch_size * max_nodes] == current_sampling_feature
+        graphs.values.nodes[: batch_size * num_variables] == current_sampling_feature
     )  # target nodes to fill values
 
     targets_ix = jnp.nonzero(targets, size=batch_size)
     target_logits = all_logits[targets_ix]
 
     log_flows = hk.nets.MLP([128, 1], name="log_flows")(global_features)
-    log_flows = jnp.squeeze(log_flows)
+    log_flows = jnp.squeeze(log_flows, axis=1)
 
     # Initialize the temperature parameter to 1
     temperature = hk.get_parameter("temperature", (), init=hk.initializers.Constant(1))

@@ -57,10 +57,10 @@ def to_graphs_tuple(
         Representation of the state containing the two GraphsTuples:
         one for the values and one for the structure.
     """
-    num_nodes = gfn_state[0].shape[0]
-    structure_node_features = np.arange(num_nodes)
+    num_variables = gfn_state[0].shape[0]
+    structure_node_features = np.arange(num_variables)
     structure_node_features = np.where(
-        gfn_state[0] == 0, num_nodes + K, structure_node_features
+        gfn_state[0] == 0, num_variables + K, structure_node_features
     )
 
     edges = []
@@ -84,22 +84,22 @@ def to_graphs_tuple(
         senders=np.array(senders),
         receivers=np.array(receivers),
         globals=None,
-        n_node=np.array([num_nodes]),
+        n_node=np.array([num_variables]),
         n_edge=np.array([len(edges)]),
     )
 
     """
     Values need to have distinct embeddings than positions. Hence we shift 
-    everything by num_nodes
+    everything by num_variables
     """
-    value_node_features = np.array(gfn_state[1]) + num_nodes
+    value_node_features = np.array(gfn_state[1]) + num_variables
     value_graph = jraph.GraphsTuple(
         nodes=value_node_features,
         edges=edge_features,
         senders=np.array(senders),
         receivers=np.array(receivers),
         globals=None,
-        n_node=np.array([num_nodes]),
+        n_node=np.array([num_variables]),
         n_edge=np.array([len(edges)]),
     )
     if pad:
@@ -107,10 +107,10 @@ def to_graphs_tuple(
         structure_graph = pad_graph_to_nearest_power_of_two(structure_graph)
         value_graph = pad_graph_to_nearest_power_of_two(value_graph)
 
-        structure_graph.nodes[num_nodes:] = (
-            num_nodes + K
+        structure_graph.nodes[num_variables:] = (
+            num_variables + K
         )  # Index signaling dummy embedding
-        value_graph.nodes[num_nodes:] = num_nodes + K
+        value_graph.nodes[num_variables:] = num_variables + K
 
     return Graph(structure=structure_graph, values=value_graph)
 

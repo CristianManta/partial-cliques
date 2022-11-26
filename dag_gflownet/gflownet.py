@@ -5,9 +5,13 @@ import optax
 from functools import partial
 from jax import grad, random, jit
 
-from dag_gflownet.nets.gnn.gflownet import gflownet
+from collections import namedtuple
+
+from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy
 from dag_gflownet.utils.gflownet import uniform_log_policy, detailed_balance_loss
 from dag_gflownet.utils.jnp_utils import batch_random_choice
+
+GFlowNetParameters = namedtuple("GFlowNetParameters", ["clique_model", "value_model"])
 
 
 class DAGGFlowNet:
@@ -26,21 +30,33 @@ class DAGGFlowNet:
         loss (in place of the L2 loss) to avoid gradient explosion.
     """
 
-    def __init__(self, model=None, delta=1.0):
-        if model is None:
-            model = gflownet
+    def __init__(self, delta=1.0):
 
-        self.model = hk.without_apply_rng(hk.transform(model))
+        clique_model = clique_policy
+        value_model = value_policy
+
+        self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
+        self.value_model = hk.without_apply_rng(hk.transform(value_model))
         self.delta = delta
 
         self._optimizer = None
 
-    def loss(self, params, samples):
-        # log_pi_t = self.model.apply(
-        #     params, samples['graph'], samples['mask'])
-        # log_pi_tp1 = self.model.apply(
-        #     params, samples['next_graph'], samples['next_mask'])
+    def loss(self, params, samples):  # TODO: Need to know how the samples look like
+        # Then evaluate the models to obtain its log-probs
 
+        # Example:
+        log_probs_clique = self.clique_model.apply(
+            params.clique_model, samples["graphs_tuple"], samples["mask"]
+        )
+
+        # OR
+        log_probs_values, value_log_flows = self.value_model.apply(
+            params.value_model, samples["graphs_tuple"], samples["mask"]
+        )
+
+        # ...
+
+        # TODO: Add custom loss here
         # return detailed_balance_loss(
         #     log_pi_t,
         #     log_pi_tp1,
@@ -90,10 +106,17 @@ class DAGGFlowNet:
 
         return (params, state, logs)
 
-    def init(self, key, optimizer, graph, mask):  # TODO: Change graph and mask to other
+    def init(self, key, optimizer, graph, mask):
         # Set the optimizer
         self._optimizer = optax.chain(optimizer, optax.zero_nans())
-        params = self.model.init(key, graph, mask)  # TODO: Change input of model
+
+        # Initialize the models
+        key1, key2 = random.split(key, 2)
+        clique_params = self.clique_model.init(key1, graph, mask)
+        value_params = self.value_model.init(key2, graph, mask)
+        params = GFlowNetParameters(
+            clique_model=clique_params, value_model=value_params
+        )
         state = self.optimizer.init(params)
         return (params, state)
 

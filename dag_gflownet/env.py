@@ -10,7 +10,7 @@ from dag_gflownet.utils.cache import LRUCache
 
 
 class GFlowNetDAGEnv(gym.vector.VectorEnv):
-    def __init__(self, num_envs, num_variables):
+    def __init__(self, num_envs, h_dim, x_dim):
         """GFlowNet environment for learning a distribution over DAGs.
 
         Parameters
@@ -18,14 +18,18 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         num_envs : int
             Number of parallel environments, or equivalently the number of
             parallel trajectories to sample.
-        num_variables : int
-            Maximum number of latent variables that can be sampled
+        h_dim : int
+            Number of latent variables.
+
+        x_dim: int
+            Number of low-level variables.
         """
 
         self._state = None
-        self.num_variables = num_variables
+        self.h_dim = h_dim
+        self.x_dim = x_dim
+        self.num_variables = h_dim + x_dim
 
-        shape = (self.num_variables, self.num_variables)
         # TODO: Change this to contain (name, value) tuples
         # observation_space = Dict({
         #     'adjacency': Box(low=0., high=1., shape=shape, dtype=np.int_),
@@ -39,15 +43,19 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         super().__init__(num_envs, observation_space, action_space)
 
     def reset(self):
-        # TODO:
-        # self._state = {
-        #     'adjacency': np.zeros(shape, dtype=np.int_),
-        #     'mask': 1 - self._closure_T,
-        #     'num_edges': np.zeros((self.num_envs,), dtype=np.int_),
-        #     'score': np.zeros((self.num_envs,), dtype=np.float_),
-        #     'order': np.full(shape, -1, dtype=np.int_)
-        # }
-        raise NotImplementedError
+        observed = np.zeros(self.num_variables, dtype=int)
+        observed[self.h_dim :] = 1
+        gfn_state = (
+            observed,
+            None,  # TODO: Need to know the values of x to fill this
+            np.ones(self.num_variables, dtype=int),
+            self.x_dim,
+        )
+        self._state = {
+            "gfn_state": gfn_state,
+            "mask": np.ones(shape=(1, self.num_variables), dtype=int),
+        }
+        return deepcopy(self._state)
 
     def step(self, actions):
         # TODO: Update current state given batch of actions

@@ -39,6 +39,26 @@ def test_to_graphs_tuple_concrete():
 
     result = to_graphs_tuple(full_cliques, gfn_state, K, pad=True)
 
+    """
+    The original graph above has 10 nodes and 36 undirected edges. We convert this 
+    into two separate GraphsTuple objects (result.structure and result.values) 
+    because the gfns need to take the sum of positional and value embeddings 
+    (which requires two containers for the nodes features, only possible with 
+    two GraphsTuple objects). 
+    
+    Each of these two graphs have been padded by another graph 
+    so that the total number of nodes is the closest higher power of two + 1 
+    and the number of edges is the closest higher power of two. 
+    This is because the two components in the padded graph are part of a 
+    single data structure (feel free to inspect the values), and we want 
+    the shape of it to not change too often, otherwise JAX will re-compile 
+    and this will slow things down. This is why n_node must be [10, 7], for 
+    a total of 17 = 2^4 + 1 nodes. 
+    
+    Regarding the edges, each undirected edge implies two directed ones, thus 
+    there are 72 *directed* edges in our original graph. With the padding, we 
+    have 128 = 72 + 56 edges.    
+    """
     np.testing.assert_array_equal(result.structure.n_node, np.array([10, 7]))
     np.testing.assert_array_equal(result.values.n_node, np.array([10, 7]))
     np.testing.assert_array_equal(result.structure.n_edge, np.array([72, 56]))

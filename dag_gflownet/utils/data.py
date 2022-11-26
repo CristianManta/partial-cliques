@@ -7,6 +7,7 @@ from pathlib import Path
 from numpy.random import default_rng
 from pgmpy.utils import get_example_model
 from pgmpy.factors.discrete import DiscreteFactor
+from pgmpy.factors import factor_sum_product
 from pgmpy.sampling import GibbsSampling
 from pgmpy.models import MarkovNetwork
 import networkx as nx
@@ -78,6 +79,8 @@ def get_random_graph(d, D, n):
     # Random Graph
     edges = []
     is_edge_list = np.random.binomial(1, 0.6, 2**d)
+    model = MarkovNetwork()
+    model.add_nodes_from(latent_nodes + obs_nodes)
 
     for e0_idx in range(d):
         for e1_idx in range(d):
@@ -93,8 +96,8 @@ def get_random_graph(d, D, n):
         for j in range(i + 1, len(obs_nodes)):
             edges += [(obs_nodes[i], obs_nodes[j])]
 
-    model = MarkovNetwork(edges)
-    cliques = list(map(tuple, nx.find_cliques(model.triangulate())))
+    model.add_edges_from(edges)
+    cliques = list(map(set, nx.find_cliques(model.triangulate())))
     factors_list = [
         DiscreteFactor(
             list(clique),
@@ -103,12 +106,52 @@ def get_random_graph(d, D, n):
         )
         for clique in cliques
     ]
+    cliques = [set(get_index_rep(clique, model)) for clique in cliques]
 
     model.add_factors(*factors_list)
     gibbs = GibbsSampling(model)
     data = gibbs.sample(size=n)
 
-    return model, data
+    return model, cliques, data
+
+
+def get_potential_fns(model: MarkovNetwork, unobserved_cliques: list):
+    """
+    Given the markov model and a mutable representation of unfinished cliques,
+    return a list of potential functions.
+
+    Inputs
+    --------
+    model : MarkovNetwork
+
+    unobserved_cliques : list
+        A list of sets, where each set correspond to a clique. Each
+        variable is represented by its index, an integer, Fully observed
+        and cashed out variables are excluded from these sets.
+
+    Outputs
+    --------
+    clique_potentials : list
+        A list of potential functions for unobserved_cliques cliques
+    """
+
+    clique_potentials = []
+    num_cliques = len(unobserved_cliques)
+    nodes = [n for n in model.nodes]
+    for c_ind in range(num_cliques):
+        clique = list(unobserved_cliques[c_ind])
+        clique_potentials.append(
+            factor_sum_product(
+                output_vars=[nodes[i] for i in clique], factors=model.factors
+            )
+        )
+
+    return clique_potentials
+
+
+def get_index_rep(nodes, model):
+    all_nodes = [n for n in model.nodes]
+    return sorted([all_nodes.index(n) for n in nodes])
 
 
 def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int):
@@ -224,15 +267,21 @@ def get_value_policy_reward(
     # we cash in every clique we complete and update the GFN state
     num_cliques = len(unobserved_cliques)
     reward = 0.0
+
     for c_ind in range(num_cliques):
         if (
             len(new_unobserved_cliques[c_ind]) == 0
             and len(unobserved_cliques[c_ind]) != 0
         ):
             gfn_state[2][np.array(list(unobserved_cliques[c_ind]))] = 0
-            reward += clique_potentials[c_ind](
-                gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]
-            )
+            if isinstance(clique_potentials[c_ind], DiscreteFactor):
+                reward += clique_potentials[c_ind].values[
+                    (tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]))
+                ]
+            else:
+                reward += clique_potentials[c_ind](
+                    gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]
+                )
 
     return gfn_state, new_unobserved_cliques, reward
 
@@ -280,6 +329,28 @@ if __name__ == "__main__":
         np.array([0, 0, 0, 1, 1, 1, 0, 0, 0, 0]),
     )
     new_gfn_state, new_unobserved_cliques, reward = get_value_policy_reward(
-        new_gfn_state, new_unobserved_cliques, full_cliques, clique_potentials, K
+        gfn_state, unobserved_cliques, full_cliques, clique_potentials, K
     )
     assert reward == 0.0
+
+    # Test potential fns
+    model, full_cliques, data = get_random_graph(d=6, D=4, n=4)
+    unobserved_cliques = full_cliques.copy()
+    gfn_state = (
+        np.array([1, 1, 1, 0, 0, 0, 1, 1, 1, 1]),
+        np.array([1, 1, 0, 2, 2, 2, 0, 1, 0, 1]),
+        np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+    )
+
+    clique_potentials = get_potential_fns(model, unobserved_cliques)
+    new_gfn_state, new_unobserved_cliques, reward = get_value_policy_reward(
+        gfn_state, unobserved_cliques, full_cliques, clique_potentials, K
+    )
+
+    target_reward = 0
+    for c_ind, c in enumerate(new_unobserved_cliques):
+        if len(c) == 0:
+            target_reward += clique_potentials[c_ind].values[
+                (tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]))
+            ]
+    assert reward == target_reward

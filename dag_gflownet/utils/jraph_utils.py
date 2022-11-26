@@ -14,6 +14,23 @@ def to_graphs_tuple(
     """Converts a tuple representation of the GFN state into a `Graph` object
     compatible with the input type of the clique and value policies.
 
+    We use the following conversion table to decide the .node attribute
+    from each output (structure_graph or value_graph) GraphsTuple:
+
+        0, 1, ..., N-1 -> identifies the observed nodes in the structure_graph
+            (corresponds to their original indices).
+
+        N, N+1, ..., N+K-1 -> identifies the values of the observed nodes
+            in the value_graph, where N+i means value i.
+
+        N+K -> identifies unobserved nodes in both the structure_graph
+        and in the value_graph. These are the dummy indices.
+
+        N+K+1 -> identifies the *unique* node whose value needs to be
+        sampled by the value policy. This is only part of the value_graph and
+        corresponds to the last node added by the clique policy.
+
+
     Parameters
     ----------
     full_cliques: list
@@ -43,7 +60,7 @@ def to_graphs_tuple(
     num_nodes = gfn_state[0].shape[0]
     structure_node_features = np.arange(num_nodes)
     structure_node_features = np.where(
-        gfn_state[0] == 0, num_nodes + K + 1, structure_node_features
+        gfn_state[0] == 0, num_nodes + K, structure_node_features
     )
 
     edges = []
@@ -85,11 +102,15 @@ def to_graphs_tuple(
         n_node=np.array([num_nodes]),
         n_edge=np.array([len(edges)]),
     )
-    if (
-        pad
-    ):  # Necessary to avoid changing shapes too often, which triggers jax re-compilation
+    if pad:
+        # Necessary to avoid changing shapes too often, which triggers jax re-compilation
         structure_graph = pad_graph_to_nearest_power_of_two(structure_graph)
         value_graph = pad_graph_to_nearest_power_of_two(value_graph)
+
+        structure_graph.nodes[num_nodes:] = (
+            num_nodes + K
+        )  # Index signaling dummy embedding
+        value_graph.nodes[num_nodes:] = num_nodes + K
 
     return Graph(structure=structure_graph, values=value_graph)
 

@@ -59,24 +59,20 @@ def main(args):
 
     # Create the environment
     # TODO:
-    env = GFlowNetDAGEnv(num_envs=args.num_envs, num_variables=args.num_variables)
+    env = GFlowNetDAGEnv(num_envs=args.num_envs, h_dim=args.h_dim, x_dim=args.x_dim)
 
     # Create the replay buffer
-    replay = ReplayBuffer(  # TODO: Modify this so that we store most likely
-        # complete trajectories (since the reward is not
-        # received at every transition)
-        args.replay_capacity,
-        num_variables=args.num_variables,
+    replay = ReplayBuffer(  # TODO: Implement replay buffer
+        args.replay_capacity, h_dim=args.h_dim, x_dim=args.x_dim
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(delta=args.delta)  # TODO:
+    gflownet = DAGGFlowNet(delta=args.delta)
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
         subkey,
         optimizer,
-        replay.dummy["graph"],  # TODO: will need to change this depending on the
-        # inputs type that we decide to use for the function approximator
+        replay.dummy["graph"],
         replay.dummy["mask"],
     )
     exploration_schedule = jax.jit(
@@ -95,11 +91,12 @@ def main(args):
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
-            # observations['graph'] = to_graphs_tuple(observations['adjacency'])
-            actions, key, logs = gflownet.act(params, key, observations, epsilon)
+            observations["graphs_tuple"] = to_graphs_tuple(observations["gfn_state"])
+            actions, key, logs = gflownet.act(
+                params, key, observations, epsilon
+            )  # TODO:
             next_observations, dones = env.step(np.asarray(actions))
-            indices = replay.add(  # TODO: Maybe only need to store an entire
-                # trajectory at the time
+            indices = replay.add(  # TODO:
                 observations,
                 actions,
                 logs["is_exploration"],
@@ -288,17 +285,6 @@ if __name__ == "__main__":
     # Graph
     graph_args = parser.add_argument_group("Graph")
 
-    graph_args.add_argument(
-        "--num_variables",
-        type=int,
-        required=True,
-        help="Maximum number of latent variables that can be sampled",
-    )
-    graph_args.add_argument(
-        "--num_edges", type=int, required=True, help="Average number of edges"
-    )  # TODO: Maybe could replace this with
-    # average size of a clique, or some other regularization term for the
-    # potentials
     graph_args.add_argument(
         "--num_samples",
         type=int,

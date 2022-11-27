@@ -10,7 +10,7 @@ from dag_gflownet.utils.cache import LRUCache
 
 
 class GFlowNetDAGEnv(gym.vector.VectorEnv):
-    def __init__(self, num_envs, h_dim, x_dim, K, graph):
+    def __init__(self, num_envs, h_dim, x_dim, K, graph, data):
         """GFlowNet environment for learning a distribution over DAGs.
 
         Parameters
@@ -26,6 +26,9 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
 
         graph: MarkovNetwork
             The ground truth UGM.
+
+        data: dataframe
+            data sampled from the ground truth UGM.
         """
 
         self._state = None
@@ -34,6 +37,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         self.K = K
         self.num_variables = h_dim + x_dim
         self.graph = graph
+        self.data = np.array(data)
 
         # TODO: Change this to the appropriate obs space
         observation_space = Dict(
@@ -47,9 +51,13 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
     def reset(self):
         observed = np.zeros(self.num_variables, dtype=int)
         observed[self.h_dim :] = 1
+        values = np.array([2] * self.num_variables)
+        values[self.h_dim :] = self.data[
+            0, self.h_dim :
+        ]  # TODO: Parallel envs based on each data sample?
         gfn_state = (
             observed,
-            None,  # TODO: Extract the values of x from self.graph
+            values,
             np.ones(self.num_variables, dtype=int),
         )
         self._state = {

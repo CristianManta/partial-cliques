@@ -54,7 +54,7 @@ def main(args):
 
     # Generate the ground truth data
     # TODO:
-    graph, _, _ = get_data("random_latent_graph", args, rng=rng)
+    graph, data, _ = get_data("random_latent_graph", args, rng=rng)
     # latent_data, obs_data = data
     true_ugm, full_cliques = graph
     clique_potentials = get_potential_fns(true_ugm, full_cliques)
@@ -67,11 +67,12 @@ def main(args):
         x_dim=args.x_dim,
         K=args.K,
         graph=true_ugm,
+        data=data,
     )
 
     # Create the replay buffer
     replay = ReplayBuffer(  # TODO: Implement replay buffer
-        args.replay_capacity, h_dim=args.h_dim, x_dim=args.x_dim
+        args.replay_capacity, num_variables=args.h_dim + args.x_dim
     )
 
     # Create the GFlowNet & initialize parameters

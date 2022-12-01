@@ -51,10 +51,11 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
     def reset(self):
         observed = np.zeros(self.num_variables, dtype=int)
         observed[self.h_dim :] = 1
-        values = np.array([2] * self.num_variables)
+        values = np.array([self.K] * self.num_variables)
         values[self.h_dim :] = self.data[
-            0, self.h_dim : # TODO: replace 0 by random index
-        ]  # TODO: Parallel envs based on each data sample?
+            np.random.randint(self.data.size(0)),
+            self.h_dim :,
+        ]
         gfn_state = (
             observed,
             values,

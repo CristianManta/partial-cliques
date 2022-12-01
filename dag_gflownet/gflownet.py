@@ -34,7 +34,7 @@ class DAGGFlowNet:
         loss (in place of the L2 loss) to avoid gradient explosion.
     """
 
-    def __init__(self, clique_potentials, full_cliques, delta=1.0):
+    def __init__(self, clique_potentials, full_cliques, x_dim, delta=1.0):
 
         clique_model = clique_policy
         value_model = value_policy
@@ -44,6 +44,7 @@ class DAGGFlowNet:
         self.delta = delta
         self.clique_potentials = clique_potentials
         self.full_cliques = full_cliques
+        self.x_dim = x_dim
 
         self._optimizer = None
 
@@ -63,27 +64,16 @@ class DAGGFlowNet:
         )
 
         log_pf = log_probs_clique + log_probs_values
-        # TODO: calculate PB for every sample by looking at how many variables are in them
-        log_pb = None
+        log_pb = 1 / (samples["observed"].sum(axis=-1) - self.x_dim)
         log_fetg_t = value_log_flows
-        # TODO: calculate the fetg for s_{t+1}
-        log_fetg_tp1 = None
-
-        # ...
-        partial_rewards = []
-        for sample in samples:
-            # TODO: extract gfn_state (a 3-tuple) and unobserved_cliques from sample
-            gfn_state = None
-            unobserved_cliques = None
-            partial_rewards.append(
-                get_value_policy_reward(
-                    gfn_state,
-                    unobserved_cliques,
-                    self.full_cliques,
-                    self.clique_potentials,
-                )
-            )
-        partial_rewards = jnp.array(partial_rewards)
+        _, log_fetg_tp1 = self.value_model.apply(
+            params.value_model,
+            samples["next_graphs_tuple"],
+            samples["next_mask"],
+            x_dim,
+            K,
+        )
+        partial_rewards = samples["reward"]
 
         return detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,

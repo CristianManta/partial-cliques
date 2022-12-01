@@ -77,7 +77,10 @@ def main(args):
 
     # Create the GFlowNet & initialize parameters
     gflownet = DAGGFlowNet(
-        delta=args.delta, clique_potentials=clique_potentials, full_cliques=full_cliques
+        delta=args.delta,
+        clique_potentials=clique_potentials,
+        full_cliques=full_cliques,
+        x_dim=args.x_dim,
     )
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(

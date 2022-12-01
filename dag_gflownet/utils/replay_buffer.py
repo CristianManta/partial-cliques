@@ -16,15 +16,18 @@ class ReplayBuffer:
         nbytes = math.ceil((num_variables**2) / 8)
         dtype = np.dtype(
             [
-                ("adjacency", np.uint8, (nbytes,)),
-                ("num_edges", np.int_, (1,)),
-                ("actions", np.int_, (1,)),
+                ("observed", np.bool, (num_variables,)),
+                ("values", np.int, (num_variables,)),
+                ("cashed", np.bool, (num_variables,)),
+                ("actions", np.int_, (2,)),
                 ("is_exploration", np.bool_, (1,)),
-                ("delta_scores", np.float_, (1,)),
-                ("scores", np.float_, (1,)),
+                ("value_reward", np.float_, (1,)),
+                ("clique_reward", np.float_, (1,)),
                 ("mask", np.uint8, (nbytes,)),
-                ("next_adjacency", np.uint8, (nbytes,)),
                 ("next_mask", np.uint8, (nbytes,)),
+                ("next_observed", np.bool, (num_variables,)),
+                ("next_values", np.bool, (num_variables,)),
+                ("next_cashed", np.bool, (num_variables,)),
             ]
         )
         self._replay = np.zeros((capacity,), dtype=dtype)
@@ -53,7 +56,9 @@ class ReplayBuffer:
         indices[~dones] = add_idx
 
         data = {
-            "adjacency": self.encode(observations["adjacency"][~dones]),
+            "observed": self.encode(observations["observed"][~dones]),
+            "values": self.encode(observations["values"][~dones]),
+            "cashed": self.encode(observations["cashed"][~dones]), # TODO: Continue
             "num_edges": observations["num_edges"][~dones],
             "actions": actions[~dones],
             "delta_scores": delta_scores[~dones],

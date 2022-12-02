@@ -2,9 +2,12 @@ import numpy as np
 import math
 
 from numpy.random import default_rng
+from collections import namedtuple
 from jraph import GraphsTuple
 
 from dag_gflownet.utils.jraph_utils import to_graphs_tuple
+
+Graph = namedtuple("Graph", ["structure", "values"])
 
 
 class ReplayBuffer:
@@ -58,7 +61,7 @@ class ReplayBuffer:
         data = {
             "observed": self.encode(observations["observed"][~dones]),
             "values": self.encode(observations["values"][~dones]),
-            "cashed": self.encode(observations["cashed"][~dones]), # TODO: Continue
+            "cashed": self.encode(observations["cashed"][~dones]),  # TODO: Continue
             "num_edges": observations["num_edges"][~dones],
             "actions": actions[~dones],
             "delta_scores": delta_scores[~dones],
@@ -143,9 +146,10 @@ class ReplayBuffer:
         return decoded.astype(dtype)
 
     @property
+    # TODO: do this properly
     def dummy(self):
         shape = (1, self.num_variables, self.num_variables)
-        graph = GraphsTuple(
+        structure_graph = GraphsTuple(
             nodes=np.arange(self.num_variables),
             edges=np.zeros((1,), dtype=np.int_),
             senders=np.zeros((1,), dtype=np.int_),
@@ -154,15 +158,27 @@ class ReplayBuffer:
             n_node=np.full((1,), self.num_variables, dtype=np.int_),
             n_edge=np.ones((1,), dtype=np.int_),
         )
-        adjacency = np.zeros(shape, dtype=np.float32)
+
+        value_graph = GraphsTuple(
+            nodes=np.arange(self.num_variables),
+            edges=np.zeros((1,), dtype=np.int_),
+            senders=np.zeros((1,), dtype=np.int_),
+            receivers=np.zeros((1,), dtype=np.int_),
+            globals=None,
+            n_node=np.full((1,), self.num_variables, dtype=np.int_),
+            n_edge=np.ones((1,), dtype=np.int_),
+        )
+
         return {
-            "adjacency": adjacency,
-            "graph": graph,
-            "num_edges": np.zeros((1,), dtype=np.int_),
-            "actions": np.zeros((1,), dtype=np.int_),
-            "delta_scores": np.zeros((1,), dtype=np.float_),
-            "mask": np.zeros(shape, dtype=np.float32),
-            "next_adjacency": adjacency,
-            "next_graph": graph,
-            "next_mask": np.zeros(shape, dtype=np.float32),
+            "graph": Graph(structure=structure_graph, values=value_graph),
+            "value_reward": np.zeros((1, 1), dtype=np.float_),
+            "clique_reward": np.zeros((1, 1), dtype=np.float_),
+            "mask": np.zeros(
+                (
+                    1,
+                    self.num_variables,
+                ),
+                dtype=np.bool,
+            ),
+            "next_mask": np.zeros((1, self.num_variables), dtype=np.bool),
         }

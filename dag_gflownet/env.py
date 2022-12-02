@@ -53,7 +53,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         observed[self.h_dim :] = 1
         values = np.array([self.K] * self.num_variables)
         values[self.h_dim :] = self.data[
-            np.random.randint(self.data.size(0)),
+            np.random.randint(self.data.shape[0]),
             self.h_dim :,
         ]
         gfn_state = (

@@ -107,7 +107,9 @@ def main(args):
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
-            observations["graphs_tuple"] = to_graphs_tuple(observations["gfn_state"])
+            observations["graphs_tuple"] = to_graphs_tuple(
+                full_cliques, observations["gfn_state"], args.K
+            )
             actions, key, logs = gflownet.act(
                 params, key, observations, epsilon, args.x_dim, args.K
             )  # TODO:

@@ -75,7 +75,7 @@ class DAGGFlowNet:
             x_dim,
             K,
         )
-        partial_rewards = samples["reward"]
+        partial_rewards = samples["reward"] # TODO: I think that here you mean value_rewards
 
         return detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,
@@ -141,7 +141,7 @@ class DAGGFlowNet:
         
         
 
-    @partial(jit, static_argnums=(0, 4, 5))
+    # @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

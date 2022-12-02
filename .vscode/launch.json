@@ -54,7 +54,7 @@
             "args": [
                 "--off_wandb",
                 "--prefill",
-                "30",
+                "2",
                 "--batch_size",
                 "1",
                 "--num_samples",

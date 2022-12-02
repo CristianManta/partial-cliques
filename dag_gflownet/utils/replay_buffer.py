@@ -97,8 +97,9 @@ class ReplayBuffer:
         # Convert structured array into dictionary
         # If we find that the training loop is too slow, we might want to 
         # store the graphs tuples using replay.add directly by storing each 
-        # of its attributes separately (ugly solution, but saves performance)
-        return {            
+        # of its attributes separately (ugly solution, but saves performance)        
+        return {           
+            "observed": samples["observed"],
             "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),           
             "next_graphs_tuple": to_graphs_tuple(self.full_cliques, next_gfn_state, self.K),     
             "actions": samples["actions"],

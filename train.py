@@ -65,6 +65,8 @@ def main(args):
         num_envs=args.num_envs,
         h_dim=args.h_dim,
         x_dim=args.x_dim,
+        clique_potentials=clique_potentials,
+        full_cliques=full_cliques,
         K=args.K,
         graph=true_ugm,
         data=data,
@@ -72,15 +74,14 @@ def main(args):
 
     # Create the replay buffer
     replay = ReplayBuffer(  # TODO: Implement replay buffer
-        args.replay_capacity, num_variables=args.h_dim + args.x_dim
+        args.replay_capacity, full_cliques, args.K, num_variables=args.h_dim + args.x_dim
     )
 
     # Create the GFlowNet & initialize parameters
     gflownet = DAGGFlowNet(
         delta=args.delta,
-        clique_potentials=clique_potentials,
-        full_cliques=full_cliques,
         x_dim=args.x_dim,
+        h_dim=args.h_dim
     )
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
@@ -113,14 +114,14 @@ def main(args):
             actions, key, logs = gflownet.act(
                 params, key, observations, epsilon, args.x_dim, args.K
             )  # TODO:
-            next_observations, dones = env.step(np.asarray(actions))
+            next_observations, rewards, dones = env.step(np.asarray(actions)[np.newaxis, ...])
             indices = replay.add(  # TODO:
                 observations,
                 actions,
                 logs["is_exploration"],
                 next_observations,
-                dones,
-                prev_indices=indices,
+                rewards,
+                dones                
             )
             observations = next_observations
 

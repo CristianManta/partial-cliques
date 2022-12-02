@@ -1,6 +1,8 @@
 import jax.numpy as jnp
+import jax
 import haiku as hk
 import optax
+import numpy as np
 
 from functools import partial
 from jax import grad, random, jit
@@ -34,7 +36,7 @@ class DAGGFlowNet:
         loss (in place of the L2 loss) to avoid gradient explosion.
     """
 
-    def __init__(self, clique_potentials, full_cliques, x_dim, delta=1.0):
+    def __init__(self, x_dim, h_dim, delta=1.0):
 
         clique_model = clique_policy
         value_model = value_policy
@@ -42,9 +44,9 @@ class DAGGFlowNet:
         self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
         self.value_model = hk.without_apply_rng(hk.transform(value_model))
         self.delta = delta
-        self.clique_potentials = clique_potentials
-        self.full_cliques = full_cliques
         self.x_dim = x_dim
+        self.h_dim = h_dim
+        self.N = x_dim + h_dim
 
         self._optimizer = None
 
@@ -63,7 +65,7 @@ class DAGGFlowNet:
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        log_pf = log_probs_clique + log_probs_values
+        log_pf = log_probs_values
         log_pb = 1 / (samples["observed"].sum(axis=-1) - self.x_dim)
         log_fetg_t = value_log_flows
         _, log_fetg_tp1 = self.value_model.apply(
@@ -84,33 +86,60 @@ class DAGGFlowNet:
             delta=self.delta,
         )
 
-    @partial(jit, static_argnums=(0, 5, 6))
+    # @partial(jit, static_argnums=(0, 5, 6))
     def act(self, params, key, observations, epsilon, x_dim, K):
-        # masks = observations['mask'].astype(jnp.float32)
-        # graphs = observations['graph']
-        # batch_size = masks.shape[0]
-        # key, subkey1, subkey2 = random.split(key, 3)
+        
+        graphs = observations['graphs_tuple']
+        masks = observations['mask'].astype(jnp.float32)
+        batch_size = masks.shape[0]
+        key, subkey1, subkey2 = random.split(key, 3)
 
-        # # Get the GFlowNet policy
-        # log_pi = self.model.apply(params, graphs, masks)
+        # First get the clique policy
+        log_probs_clique = self.clique_model.apply(
+            params.clique_model, graphs, masks, x_dim, K
+        )
 
-        # # Get uniform policy
+        # Get uniform policy
         # log_uniform = uniform_log_policy(masks)
 
-        # # Mixture of GFlowNet policy and uniform policy
+        # Mixture of GFlowNet policy and uniform policy
         # is_exploration = random.bernoulli(
         #     subkey1, p=1. - epsilon, shape=(batch_size, 1))
         # log_pi = jnp.where(is_exploration, log_uniform, log_pi)
 
-        # # Sample actions
-        # actions = batch_random_choice(subkey2, jnp.exp(log_pi), masks)
+        # Sample actions
+        # clique_policy_actions = batch_random_choice(subkey2, jnp.exp(log_probs_clique), masks)
+        clique_actions = jax.random.categorical(subkey1, log_probs_clique[0] / 999) # a single integer between 0 and h_dim
+        
+        if clique_actions == self.h_dim:
+            # we are done!
+            logs = {
+                'is_exploration': None, # TODO:
+            }    
+    
+            actions = np.array([-1, -1])
+            return actions, key, logs
+            
+        graphs.values.nodes[clique_actions] = self.N + K + 1
+        
+        # use the value GFN to sample a value for the variable we just observed
+        log_probs_value, log_flow = self.value_model.apply(
+            params.value_model, graphs, masks, x_dim, K
+        )
+        
+        sampled_value = jax.random.categorical(subkey1, log_probs_value)
+        
+        
+        
+        actions = np.array([clique_actions, sampled_value])
 
-        # logs = {
-        #     'is_exploration': is_exploration.astype(jnp.int32),
-        # }
-        # return (actions, key, logs)
-        # TODO:
-        raise NotImplementedError
+
+        logs = {
+            'is_exploration': None,
+        }
+        return (actions, key, logs)
+        
+        
 
     @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):

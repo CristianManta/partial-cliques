@@ -12,11 +12,12 @@ Graph = namedtuple("Graph", ["structure", "values"])
 
 class ReplayBuffer:
     # TODO: Change this class depending on whether we want to store whole transitions in the replay buffer
-    def __init__(self, capacity, num_variables):
+    def __init__(self, capacity, full_cliques, K, num_variables):
         self.capacity = capacity
         self.num_variables = num_variables
-
-        nbytes = math.ceil((num_variables**2) / 8)
+        self.full_cliques = full_cliques
+        self.K = K
+        
         dtype = np.dtype(
             [
                 ("observed", np.bool, (num_variables,)),
@@ -24,10 +25,10 @@ class ReplayBuffer:
                 ("cashed", np.bool, (num_variables,)),
                 ("actions", np.int_, (2,)),
                 ("is_exploration", np.bool_, (1,)),
-                ("value_reward", np.float_, (1,)),
-                ("clique_reward", np.float_, (1,)),
-                ("mask", np.uint8, (nbytes,)),
-                ("next_mask", np.uint8, (nbytes,)),
+                ("value_rewards", np.float_, (1,)),
+                ("var_rewards", np.float_, (1,)),
+                ("mask", np.uint8, (num_variables,)),
+                ("next_mask", np.uint8, (num_variables,)),
                 ("next_observed", np.bool, (num_variables,)),
                 ("next_values", np.bool, (num_variables,)),
                 ("next_cashed", np.bool, (num_variables,)),
@@ -44,56 +45,62 @@ class ReplayBuffer:
         actions,
         is_exploration,
         next_observations,
-        delta_scores,
-        dones,
-        prev_indices=None,
-    ):
-        indices = np.full((dones.shape[0],), -1, dtype=np.int_)
-        if np.all(dones):
-            return indices
+        rewards,     
+        dones        
+    ):        
+        
+        (var_rewards, value_rewards) = rewards
 
-        num_samples = np.sum(~dones)
-        add_idx = np.arange(self._index, self._index + num_samples) % self.capacity
-        self._is_full |= self._index + num_samples >= self.capacity
-        self._index = (self._index + num_samples) % self.capacity
-        indices[~dones] = add_idx
+        #num_samples = np.sum(~dones)
+        add_idx = (self._index + 1) % self.capacity
+        self._index = (self._index + 1) % self.capacity
+        #self._is_full |= self._index + num_samples >= self.capacity
+        #self._index = (self._index + num_samples) % self.capacity
+        #indices[~dones] = add_idx
 
         data = {
-            "observed": self.encode(observations["observed"][~dones]),
-            "values": self.encode(observations["values"][~dones]),
-            "cashed": self.encode(observations["cashed"][~dones]),  # TODO: Continue
-            "num_edges": observations["num_edges"][~dones],
-            "actions": actions[~dones],
-            "delta_scores": delta_scores[~dones],
-            "mask": self.encode(observations["mask"][~dones]),
-            "next_adjacency": self.encode(next_observations["adjacency"][~dones]),
-            "next_mask": self.encode(next_observations["mask"][~dones]),
+            "observed": observations["gfn_state"][0],
+            "values":observations["gfn_state"][1],
+            "cashed":observations["gfn_state"][2],
+            "next_observed": next_observations["gfn_state"][0],
+            "next_values":next_observations["gfn_state"][1],
+            "next_cashed":next_observations["gfn_state"][2],
+            "actions": actions,
+            "var_rewards": np.array([var_rewards]),
+            "value_rewards": np.array([value_rewards]),
+            "mask": observations["mask"],            
+            "next_mask": next_observations["mask"]
             # Extra keys for monitoring
-            "is_exploration": is_exploration[~dones],
-            "scores": observations["score"][~dones],
         }
 
         for name in data:
             shape = self._replay.dtype[name].shape
             self._replay[name][add_idx] = np.asarray(data[name].reshape(-1, *shape))
 
-        if prev_indices is not None:
-            self._prev[add_idx] = prev_indices[~dones]
-
-        return indices
+        
 
     def sample(self, batch_size, rng=default_rng()):
+        # TODO
         indices = rng.choice(len(self), size=batch_size, replace=False)
         samples = self._replay[indices]
 
-        adjacency = self.decode(samples["adjacency"], dtype=np.int_)
+        observed_nodes = samples["observed"]
+        values = samples['values']
+        cashed = samples['cashed']
+        gfn_state = (observed_nodes, values, cashed)
+        
+        next_observed_nodes = samples["next_observed"]
+        next_values = samples['next_values']
+        next_cashed = samples['next_cashed']
+        next_gfn_state = (next_observed_nodes, next_values, next_cashed)
+        
+        
         next_adjacency = self.decode(samples["next_adjacency"], dtype=np.int_)
 
         # Convert structured array into dictionary
-        return {
-            "adjacency": adjacency.astype(np.float32),
-            "graph": to_graphs_tuple(adjacency),
-            "num_edges": samples["num_edges"],
+        return {            
+            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),            
+            "next_graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),            
             "actions": samples["actions"],
             "delta_scores": samples["delta_scores"],
             "mask": self.decode(samples["mask"]),

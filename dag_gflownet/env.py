@@ -65,8 +65,14 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             "gfn_state": gfn_state,
             "mask": np.ones(shape=(1, self.num_variables), dtype=int),
         }
+        # mark x as observed and not eligible for sampling
+        self._state["mask"][0, self.h_dim :] = 0
         return deepcopy(self._state)
 
     def step(self, actions):
-        # TODO: Update current state given batch of actions
-        raise NotImplementedError
+        assert len(actions.shape) == 2
+        assert actions.shape[0] == 1
+        assert actions.shape[1] == 2
+        self._state["gfn_state"][0][actions[0, 0]] = 1
+        self._state["gfn_state"][1][actions[0, 0]] = actions[0, 1]
+        self._state["mask"][0][actions[0, 0]] = 0

@@ -54,7 +54,7 @@ class ReplayBuffer:
         #num_samples = np.sum(~dones)
         add_idx = (self._index + 1) % self.capacity
         self._index = (self._index + 1) % self.capacity
-        #self._is_full |= self._index + num_samples >= self.capacity
+        self._is_full |= self._index == self.capacity - 1
         #self._index = (self._index + num_samples) % self.capacity
         #indices[~dones] = add_idx
 
@@ -84,29 +84,28 @@ class ReplayBuffer:
         indices = rng.choice(len(self), size=batch_size, replace=False)
         samples = self._replay[indices]
 
-        observed_nodes = samples["observed"]
+        observed = samples["observed"]
         values = samples['values']
         cashed = samples['cashed']
-        gfn_state = (observed_nodes, values, cashed)
+        gfn_state = (observed, values, cashed)
         
-        next_observed_nodes = samples["next_observed"]
+        next_observed = samples["next_observed"]
         next_values = samples['next_values']
         next_cashed = samples['next_cashed']
-        next_gfn_state = (next_observed_nodes, next_values, next_cashed)
-        
-        
-        next_adjacency = self.decode(samples["next_adjacency"], dtype=np.int_)
+        next_gfn_state = (next_observed, next_values, next_cashed)        
 
         # Convert structured array into dictionary
+        # If we find that the training loop is too slow, we might want to 
+        # store the graphs tuples using replay.add directly by storing each 
+        # of its attributes separately (ugly solution, but saves performance)
         return {            
-            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),            
-            "next_graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),            
+            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),           
+            "next_graphs_tuple": to_graphs_tuple(self.full_cliques, next_gfn_state, self.K),     
             "actions": samples["actions"],
-            "delta_scores": samples["delta_scores"],
-            "mask": self.decode(samples["mask"]),
-            "next_adjacency": next_adjacency.astype(np.float32),
-            "next_graph": to_graphs_tuple(next_adjacency),
-            "next_mask": self.decode(samples["next_mask"]),
+            "var_rewards": samples["var_rewards"],
+            "value_rewards": samples["value_rewards"],
+            "mask": samples["mask"],
+            "next_mask": samples["next_mask"]
         }
 
     def __len__(self):

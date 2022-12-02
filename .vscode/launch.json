@@ -53,6 +53,8 @@
             "justMyCode": true,
             "args": [
                 "--off_wandb",
+                "--prefill",
+                "100",
                 "--num_samples",
                 "1",
                 "--x_dim",

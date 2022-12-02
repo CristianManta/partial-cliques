@@ -86,7 +86,7 @@ class DAGGFlowNet:
             delta=self.delta,
         )
 
-    # @partial(jit, static_argnums=(0, 5, 6))
+    @partial(jit, static_argnums=(0, 5, 6))
     def act(self, params, key, observations, epsilon, x_dim, K):
         
         graphs = observations['graphs_tuple']

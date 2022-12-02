@@ -75,7 +75,9 @@ class DAGGFlowNet:
             x_dim,
             K,
         )
-        partial_rewards = samples["reward"] # TODO: I think that here you mean value_rewards
+        partial_rewards = samples[
+            "reward"
+        ]  # TODO: I think that here you mean value_rewards
 
         return detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,
@@ -88,9 +90,9 @@ class DAGGFlowNet:
 
     # @partial(jit, static_argnums=(0, 5, 6))
     def act(self, params, key, observations, epsilon, x_dim, K):
-        
-        graphs = observations['graphs_tuple']
-        masks = observations['mask'].astype(jnp.float32)
+
+        graphs = observations["graphs_tuple"]
+        masks = observations["mask"].astype(jnp.float32)
         batch_size = masks.shape[0]
         key, subkey1, subkey2 = random.split(key, 3)
 
@@ -109,37 +111,34 @@ class DAGGFlowNet:
 
         # Sample actions
         # clique_policy_actions = batch_random_choice(subkey2, jnp.exp(log_probs_clique), masks)
-        clique_actions = jax.random.categorical(subkey1, log_probs_clique[0] / 999) # a single integer between 0 and h_dim
-        
+        clique_actions = jax.random.categorical(
+            subkey1, log_probs_clique[0] / 999
+        )  # a single integer between 0 and h_dim
+
         if clique_actions == self.h_dim:
             # we are done!
             logs = {
-                'is_exploration': None, # TODO:
-            }    
-    
+                "is_exploration": None,  # TODO:
+            }
+
             actions = np.array([-1, -1])
             return actions, key, logs
-            
+
         graphs.values.nodes[clique_actions] = self.N + K + 1
-        
+
         # use the value GFN to sample a value for the variable we just observed
         log_probs_value, log_flow = self.value_model.apply(
             params.value_model, graphs, masks, x_dim, K
         )
-        
+
         sampled_value = jax.random.categorical(subkey1, log_probs_value)
-        
-        
-        
+
         actions = np.array([clique_actions, sampled_value])
 
-
         logs = {
-            'is_exploration': None,
+            "is_exploration": None,
         }
         return (actions, key, logs)
-        
-        
 
     # @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):

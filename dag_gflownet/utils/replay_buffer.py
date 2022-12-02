@@ -17,7 +17,7 @@ class ReplayBuffer:
         self.num_variables = num_variables
         self.full_cliques = full_cliques
         self.K = K
-        
+
         dtype = np.dtype(
             [
                 ("observed", np.bool, (num_variables,)),
@@ -40,35 +40,29 @@ class ReplayBuffer:
         self._prev = np.full((capacity,), -1, dtype=np.int_)
 
     def add(
-        self,
-        observations,
-        actions,
-        is_exploration,
-        next_observations,
-        rewards,     
-        dones        
-    ):        
-        
+        self, observations, actions, is_exploration, next_observations, rewards, dones
+    ):
+
         (var_rewards, value_rewards) = rewards
 
-        #num_samples = np.sum(~dones)
+        # num_samples = np.sum(~dones)
         add_idx = (self._index + 1) % self.capacity
         self._index = (self._index + 1) % self.capacity
         self._is_full |= self._index == self.capacity - 1
-        #self._index = (self._index + num_samples) % self.capacity
-        #indices[~dones] = add_idx
+        # self._index = (self._index + num_samples) % self.capacity
+        # indices[~dones] = add_idx
 
         data = {
             "observed": observations["gfn_state"][0],
-            "values":observations["gfn_state"][1],
-            "cashed":observations["gfn_state"][2],
+            "values": observations["gfn_state"][1],
+            "cashed": observations["gfn_state"][2],
             "next_observed": next_observations["gfn_state"][0],
-            "next_values":next_observations["gfn_state"][1],
-            "next_cashed":next_observations["gfn_state"][2],
+            "next_values": next_observations["gfn_state"][1],
+            "next_cashed": next_observations["gfn_state"][2],
             "actions": actions,
             "var_rewards": np.array([var_rewards]),
             "value_rewards": np.array([value_rewards]),
-            "mask": observations["mask"],            
+            "mask": observations["mask"],
             "next_mask": next_observations["mask"]
             # Extra keys for monitoring
         }
@@ -77,36 +71,36 @@ class ReplayBuffer:
             shape = self._replay.dtype[name].shape
             self._replay[name][add_idx] = np.asarray(data[name].reshape(-1, *shape))
 
-        
-
     def sample(self, batch_size, rng=default_rng()):
         # TODO
         indices = rng.choice(len(self), size=batch_size, replace=False)
         samples = self._replay[indices]
 
         observed = samples["observed"]
-        values = samples['values']
-        cashed = samples['cashed']
+        values = samples["values"]
+        cashed = samples["cashed"]
         gfn_state = (observed, values, cashed)
-        
+
         next_observed = samples["next_observed"]
-        next_values = samples['next_values']
-        next_cashed = samples['next_cashed']
-        next_gfn_state = (next_observed, next_values, next_cashed)        
+        next_values = samples["next_values"]
+        next_cashed = samples["next_cashed"]
+        next_gfn_state = (next_observed, next_values, next_cashed)
 
         # Convert structured array into dictionary
-        # If we find that the training loop is too slow, we might want to 
-        # store the graphs tuples using replay.add directly by storing each 
-        # of its attributes separately (ugly solution, but saves performance)        
-        return {           
+        # If we find that the training loop is too slow, we might want to
+        # store the graphs tuples using replay.add directly by storing each
+        # of its attributes separately (ugly solution, but saves performance)
+        return {
             "observed": samples["observed"],
-            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),           
-            "next_graphs_tuple": to_graphs_tuple(self.full_cliques, next_gfn_state, self.K),     
+            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),
+            "next_graphs_tuple": to_graphs_tuple(
+                self.full_cliques, next_gfn_state, self.K
+            ),
             "actions": samples["actions"],
             "var_rewards": samples["var_rewards"],
             "value_rewards": samples["value_rewards"],
             "mask": samples["mask"],
-            "next_mask": samples["next_mask"]
+            "next_mask": samples["next_mask"],
         }
 
     def __len__(self):

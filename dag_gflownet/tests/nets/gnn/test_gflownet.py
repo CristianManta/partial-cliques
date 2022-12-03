@@ -43,11 +43,30 @@ def test_clique_policy_shapes_jit(setup):
 
     # Initializing the model
     model = hk.without_apply_rng(hk.transform(clique_policy))
-    params = model.init(key, graphs, masks, x_dim, K)
+    sampling_method = 1
+    params = model.init(key, graphs, masks, x_dim, K, sampling_method)
 
     # Applying the model
-    forward = jax.jit(model.apply, static_argnums=(3, 4))
-    log_policy_cliques = forward(params, graphs, masks, x_dim, K)
+    forward = jax.jit(model.apply, static_argnums=(3, 4, 5))
+    log_policy_cliques = forward(params, graphs, masks, x_dim, K, sampling_method)
+
+    assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] - x_dim + 1)
+
+    sampling_method = 2
+    params = model.init(key, graphs, masks, x_dim, K, sampling_method)
+
+    # Applying the model
+    forward = jax.jit(model.apply, static_argnums=(3, 4, 5))
+    log_policy_cliques = forward(params, graphs, masks, x_dim, K, sampling_method)
+
+    assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] - x_dim + 1)
+
+    sampling_method = 3
+    params = model.init(key, graphs, masks, x_dim, K, sampling_method)
+
+    # Applying the model
+    forward = jax.jit(model.apply, static_argnums=(3, 4, 5))
+    log_policy_cliques = forward(params, graphs, masks, x_dim, K, sampling_method)
 
     assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] - x_dim + 1)
 

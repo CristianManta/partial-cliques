@@ -54,6 +54,8 @@ def test_clique_policy_shapes_jit(setup):
 
 def test_value_policy_shapes_jit(setup):
     graphs, masks, x_dim, K = setup
+    graphs.values.nodes[1] = masks.shape[1] + K + 1 # Let's say that we want to sample the value for node at index 1
+    graphs.structure.nodes[1] = 1
     seed = 0
     key = random.PRNGKey(seed)
 
@@ -65,5 +67,5 @@ def test_value_policy_shapes_jit(setup):
     forward = jax.jit(model.apply, static_argnums=(3, 4))
     log_policy_values, log_flows = forward(params, graphs, masks, x_dim, K)
 
-    assert log_policy_values.shape == (masks.shape[0],)
+    assert log_policy_values.shape == (masks.shape[0], K)
     assert log_flows.shape == (masks.shape[0],)

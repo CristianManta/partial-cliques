@@ -7,7 +7,11 @@ from copy import deepcopy
 from gym.spaces import Dict, Box, Discrete
 
 from dag_gflownet.utils.cache import LRUCache
-from dag_gflownet.utils.data import get_value_policy_reward, get_potential_fns
+from dag_gflownet.utils.data import (
+    get_value_policy_reward,
+    get_potential_fns,
+    get_clique_selection_mask,
+)
 
 
 class GFlowNetDAGEnv(gym.vector.VectorEnv):
@@ -99,8 +103,13 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         assert self._state["gfn_state"][0][obs_var] == 0
         self._state["gfn_state"][0][obs_var] = 1
         self._state["gfn_state"][1][obs_var] = obs_value
-        self._state["mask"][0][obs_var] = 0
         var_reward = 0.0  # TODO
+
+        self._state["mask"] = np.array(
+            get_clique_selection_mask(
+                self._state["gfn_state"], self._state["unobserved_cliques"], self.K
+            )
+        )[np.newaxis, ...]
         new_gfn_state, unobserved_cliques, value_reward = get_value_policy_reward(
             self._state["gfn_state"],
             self._state["unobserved_cliques"],
@@ -108,6 +117,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             self.clique_potentials,
             self.K,
         )
-        self._state["gfn_state"] = new_gfn_state
         self._state["unobserved_cliques"] = unobserved_cliques
+        self._state["gfn_state"] = new_gfn_state
+
         return deepcopy(self._state), (var_reward, value_reward), is_done

@@ -144,7 +144,7 @@ def detailed_balance_loss_free_energy_to_go(
         - log_fetg_tp1
     )
     loss = jnp.mean(optax.huber_loss(error, delta=delta))
-    # if jnp.isnan(loss):
+    # if loss > 100:
     #    breakpoint()
     logs = {
         "error": error,

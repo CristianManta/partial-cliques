@@ -109,7 +109,10 @@ def get_random_graph(d, D, n):
         )
         for clique in cliques
     ]
-    cliques = [set(get_index_rep(clique, model)) for clique in cliques]
+    cliques = [
+        set(get_index_rep(clique, model)) - set(get_index_rep(obs_nodes, model))
+        for clique in cliques
+    ]
 
     model.add_factors(*factors_list)
     gibbs = GibbsSampling(model)
@@ -203,7 +206,10 @@ def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int
     eligible_vars = set().union(*eligible_cliques) - set(active_vars)
 
     mask = np.zeros(N)
-    mask[np.array(list(eligible_vars))] = 1
+    if len(eligible_vars) == 0:
+        mask = 1 - gfn_state[0]
+    else:
+        mask[np.array(list(eligible_vars))] = 1
     return mask
 
 

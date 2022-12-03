@@ -65,7 +65,7 @@ class DAGGFlowNet:
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        log_pf = log_probs_values
+        log_pf = log_probs_values[0, samples["actions"][0, 1]]
         log_pb = jnp.where(
             samples["done"],
             0,
@@ -144,7 +144,7 @@ class DAGGFlowNet:
         }
         return (actions, key, logs)
 
-    @partial(jit, static_argnums=(0, 4, 5))
+    # @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

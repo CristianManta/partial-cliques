@@ -66,7 +66,11 @@ class DAGGFlowNet:
         )
 
         log_pf = log_probs_values
-        log_pb = 1 / (samples["observed"].sum(axis=-1) - self.x_dim)
+        log_pb = jnp.where(
+            samples["done"],
+            0,
+            jnp.log(1 / (samples["next_observed"].sum(axis=-1) - self.x_dim)),
+        )
         log_fetg_t = value_log_flows
         _, log_fetg_tp1 = self.value_model.apply(
             params.value_model,
@@ -75,8 +79,8 @@ class DAGGFlowNet:
             x_dim,
             K,
         )
-        partial_rewards = samples[
-            "reward"
+        value_rewards = samples[
+            "value_rewards"
         ]  # TODO: I think that here you mean value_rewards
 
         return detailed_balance_loss_free_energy_to_go(
@@ -84,7 +88,7 @@ class DAGGFlowNet:
             log_fetg_tp1=log_fetg_tp1,
             log_pf=log_pf,
             log_pb=log_pb,
-            partial_rewards=partial_rewards,
+            partial_rewards=value_rewards,
             delta=self.delta,
         )
 

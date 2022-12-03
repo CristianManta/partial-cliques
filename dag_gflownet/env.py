@@ -70,6 +70,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             "gfn_state": gfn_state,
             "mask": np.ones(shape=(1, self.num_variables), dtype=int),
             "unobserved_cliques": deepcopy(self.full_cliques),
+            "is_done": False,
         }
         # mark x as observed and not eligible for sampling
         self._state["mask"][0, self.h_dim :] = 0
@@ -83,13 +84,19 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         obs_var = actions[0, 0]
         obs_value = actions[0, 1]
         if obs_var == -1:
-            is_done = True
+            self._state["is_done"] = True
 
             mi_reward = 0.0  # TODO:
             value_reward = 0  # TODO: calculate partial reward by merging cliques
 
-            return self.reset(), (mi_reward, value_reward), is_done
+            return (
+                deepcopy(self._state),
+                (mi_reward, value_reward),
+                self._state["is_done"],
+            )
         is_done = False
+        assert self._state["mask"][0, obs_var] == 1
+        assert self._state["gfn_state"][0][obs_var] == 0
         self._state["gfn_state"][0][obs_var] = 1
         self._state["gfn_state"][1][obs_var] = obs_value
         self._state["mask"][0][obs_var] = 0

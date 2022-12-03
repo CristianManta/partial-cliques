@@ -211,10 +211,10 @@ def value_policy(graphs, masks, x_dim, K):
         queries, keys, values
     )
 
-    all_logits = hk.nets.MLP([128, 1], name="logit")(
+    all_logits = hk.nets.MLP([128, K], name="logit")(
         node_features
     )  # Assumption that k = 2 here (last layer)
-    all_logits = jnp.squeeze(all_logits)
+    # all_logits = jnp.squeeze(all_logits)
     targets = (
         graphs.values.nodes[: batch_size * num_variables] == current_sampling_feature
     )  # target nodes to fill values
@@ -228,4 +228,4 @@ def value_policy(graphs, masks, x_dim, K):
     # Initialize the temperature parameter to 1
     temperature = hk.get_parameter("temperature", (), init=hk.initializers.Constant(1))
 
-    return (nn.log_sigmoid(target_logits / temperature), log_flows)
+    return (target_logits / temperature, log_flows)

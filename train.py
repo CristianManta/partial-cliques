@@ -101,7 +101,6 @@ def main(args):
     )
 
     # Training loop
-    indices = None
     observations = env.reset()
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
@@ -116,7 +115,7 @@ def main(args):
             next_observations, rewards, dones = env.step(
                 np.asarray(actions)[np.newaxis, ...]
             )
-            indices = replay.add(  # TODO:
+            replay.add(  # TODO:
                 observations,
                 actions,
                 logs["is_exploration"],
@@ -124,7 +123,11 @@ def main(args):
                 rewards,
                 dones,
             )
-            observations = next_observations
+
+            if dones:
+                observations = env.reset()
+            else:
+                observations = next_observations
 
             if iteration >= args.prefill:
                 # Update the parameters of the GFlowNet

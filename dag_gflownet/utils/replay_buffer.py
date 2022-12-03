@@ -25,6 +25,7 @@ class ReplayBuffer:
                 ("cashed", np.bool, (num_variables,)),
                 ("actions", np.int_, (2,)),
                 ("is_exploration", np.bool_, (1,)),
+                ("done", np.bool_, (1,)),
                 ("value_rewards", np.float_, (1,)),
                 ("var_rewards", np.float_, (1,)),
                 ("mask", np.uint8, (num_variables,)),
@@ -46,7 +47,7 @@ class ReplayBuffer:
         (var_rewards, value_rewards) = rewards
 
         # num_samples = np.sum(~dones)
-        add_idx = (self._index + 1) % self.capacity
+        add_idx = self._index
         self._index = (self._index + 1) % self.capacity
         self._is_full |= self._index == self.capacity - 1
         # self._index = (self._index + num_samples) % self.capacity
@@ -56,6 +57,7 @@ class ReplayBuffer:
             "observed": observations["gfn_state"][0],
             "values": observations["gfn_state"][1],
             "cashed": observations["gfn_state"][2],
+            "done": np.array([next_observations["is_done"]]),
             "next_observed": next_observations["gfn_state"][0],
             "next_values": next_observations["gfn_state"][1],
             "next_cashed": next_observations["gfn_state"][2],
@@ -92,11 +94,13 @@ class ReplayBuffer:
         # of its attributes separately (ugly solution, but saves performance)
         return {
             "observed": samples["observed"],
+            "next_observed": samples["next_observed"],
             "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),
             "next_graphs_tuple": to_graphs_tuple(
                 self.full_cliques, next_gfn_state, self.K
             ),
             "actions": samples["actions"],
+            "done": samples["done"],
             "var_rewards": samples["var_rewards"],
             "value_rewards": samples["value_rewards"],
             "mask": samples["mask"],

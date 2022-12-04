@@ -66,7 +66,7 @@ def get_data(name, args, rng=default_rng()):
 
     elif name == "random_latent_graph":
         graph, cliques, data = get_random_graph(
-            d=args.x_dim, D=args.h_dim, n=args.num_samples
+            d=args.h_dim, D=args.x_dim, n=args.num_samples, rng=rng
         )
         graph = (graph, cliques)
         score = None
@@ -76,12 +76,12 @@ def get_data(name, args, rng=default_rng()):
     return graph, data, score
 
 
-def get_random_graph(d, D, n):
+def get_random_graph(d, D, n, rng):
     latent_nodes = ["h" + str(i) for i in range(d)]
     obs_nodes = ["x" + str(i) for i in range(D)]
     # Random Graph
     edges = []
-    is_edge_list = np.random.binomial(1, 0.6, 2**d)
+    is_edge_list = rng.binomial(1, 0.6, 2**d)
     model = MarkovNetwork()
     model.add_nodes_from(latent_nodes + obs_nodes)
 
@@ -105,11 +105,11 @@ def get_random_graph(d, D, n):
         DiscreteFactor(
             list(clique),
             [2] * len(list(clique)),
-            np.random.rand(2 ** (len(list(clique)))),
+            rng.random(2 ** (len(list(clique)))),
         )
         for clique in cliques
     ]
-    cliques = [
+    cliques = [ # TODO: (Cristian) I don't understand how the conversion is done from line 103 to line 112 (inspect with debugger)
         set(get_index_rep(clique, model)) - set(get_index_rep(obs_nodes, model))
         for clique in cliques
     ]

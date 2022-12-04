@@ -272,18 +272,16 @@ def get_value_policy_reward(
 
     # we remove fully observed nodes
     newly_observed_vars = set(np.nonzero(gfn_state[0] & gfn_state[2])[0].flatten())
-    new_unobserved_cliques = [c - newly_observed_vars for c in unobserved_cliques]
+    new_unobserved_cliques = [c for c in unobserved_cliques]
 
     # we cash in every clique we complete and update the GFN state
     num_cliques = len(unobserved_cliques)
     reward = 0.0
 
     for c_ind in range(num_cliques):
-        if (
-            len(new_unobserved_cliques[c_ind]) == 0
-            and len(unobserved_cliques[c_ind]) != 0
-        ):
-            gfn_state[2][np.array(list(unobserved_cliques[c_ind]))] = 0
+        if unobserved_cliques[c_ind] in newly_observed_vars:
+            new_unobserved_cliques[c_ind] = set()
+            gfn_state[2][np.array(list(full_cliques[c_ind]))] = 0
             if isinstance(clique_potentials[c_ind], DiscreteFactor):
                 reward += clique_potentials[c_ind].values[
                     (tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]))

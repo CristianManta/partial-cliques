@@ -9,7 +9,7 @@ from jax import lax, nn, jit
 from dag_gflownet.utils.gflownet import log_policy_cliques
 
 
-def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
+def clique_policy(graphs, masks, x_dim, K, sampling_method=2):
     """
     Parameters
     ----------
@@ -32,12 +32,12 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
     K: int
         Number of different discrete values that the nodes can take.
     sampling_method: int
-        3 possible values: 
-        1: "policy" (default): follow the network parameters to predict the next 
+        3 possible values:
+        1: "policy" (default): follow the network parameters to predict the next
         node to sample
-        2: "sequential": Automatically choose the first available node according to 
+        2: "sequential": Automatically choose the first available node according to
         the mask for sampling, ignoring the learned policy.
-        3: "uniform": Choose the node to sample according to an uniform distribution 
+        3: "uniform": Choose the node to sample according to an uniform distribution
         among the eligible nodes (according to the mask), ignoring the learned policy.
 
 
@@ -53,8 +53,10 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
     batch_size, num_variables = masks.shape
     h_dim = num_variables - x_dim
     masks = masks[:, :h_dim]
-    
-    if sampling_method == 2: # NOTE: This section has not been tested on batch_size != 1
+
+    if (
+        sampling_method == 2
+    ):  # NOTE: This section has not been tested on batch_size != 1
         assert batch_size == 1
         masking_value = -1e5
         stop = jnp.full((batch_size, 1), masking_value, dtype=float)
@@ -62,13 +64,12 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
         logits = jnp.zeros((batch_size, h_dim), dtype=float)
         logits = logits.at[0, first_available_node_ix].set(-masking_value)
         return log_policy_cliques(logits, stop, masks)
-    
+
     if sampling_method == 3:
         masking_value = -1e5
         stop = jnp.full((batch_size, 1), masking_value, dtype=float)
         logits = jnp.zeros((batch_size, h_dim), dtype=float)
         return log_policy_cliques(logits, stop, masks)
-        
 
     # Embedding of the nodes & edges
     node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=128)

@@ -70,6 +70,8 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             values,
             np.ones(self.num_variables, dtype=int),
         )
+        # mark x as cashed
+        gfn_state[2][self.h_dim :] = 0
         self._state = {
             "gfn_state": gfn_state,
             "mask": np.ones(shape=(1, self.num_variables), dtype=int),

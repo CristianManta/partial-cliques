@@ -108,8 +108,9 @@ def get_random_graph(d, D, n, rng):
         )
         for clique in cliques
     ]
-    cliques = [  # TODO: (Cristian) I don't understand how the conversion is done from line 103 to line 112 (inspect with debugger)
-        set(get_index_rep(clique, model)) - set(get_index_rep(obs_nodes, model))
+
+    cliques = [
+        get_index_rep(clique, model) - get_index_rep(obs_nodes, model)
         for clique in cliques
     ]
 
@@ -181,7 +182,7 @@ def get_energy_fns(model: MarkovNetwork, full_cliques: list):
 
 def get_index_rep(nodes, model):
     all_nodes = [n for n in model.nodes]
-    return sorted([all_nodes.index(n) for n in nodes])
+    return set([sorted(all_nodes).index(n) for n in nodes])
 
 
 def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int):

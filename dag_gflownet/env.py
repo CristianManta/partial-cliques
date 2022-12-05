@@ -8,7 +8,7 @@ from gym.spaces import Dict, Box, Discrete
 
 from dag_gflownet.utils.cache import LRUCache
 from dag_gflownet.utils.data import (
-    get_value_policy_reward,
+    get_value_policy_energy,
     get_potential_fns,
     get_clique_selection_mask,
 )
@@ -92,12 +92,12 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         if obs_var == -1:
             self._state["is_done"] = True
 
-            mi_reward = 0.0  # TODO:
-            value_reward = 0  # TODO: calculate partial reward by merging cliques
+            var_energy = 0.0  # TODO:
+            value_energy = 0  # TODO: calculate partial energy by merging cliques
 
             return (
                 deepcopy(self._state),
-                (mi_reward, value_reward),
+                (var_energy, value_energy),
                 self._state["is_done"],
             )
         is_done = False
@@ -105,14 +105,14 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         assert self._state["gfn_state"][0][obs_var] == 0
         self._state["gfn_state"][0][obs_var] = 1
         self._state["gfn_state"][1][obs_var] = obs_value
-        var_reward = 0.0  # TODO
+        var_energy = 0.0  # TODO
 
         self._state["mask"] = np.array(
             get_clique_selection_mask(
                 self._state["gfn_state"], self._state["unobserved_cliques"], self.K
             )
         )[np.newaxis, ...]
-        new_gfn_state, unobserved_cliques, value_reward = get_value_policy_reward(
+        new_gfn_state, unobserved_cliques, value_energy = get_value_policy_energy(
             self._state["gfn_state"],
             self._state["unobserved_cliques"],
             self.full_cliques,
@@ -122,4 +122,4 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         self._state["unobserved_cliques"] = unobserved_cliques
         self._state["gfn_state"] = new_gfn_state
 
-        return deepcopy(self._state), (var_reward, value_reward), is_done
+        return deepcopy(self._state), (var_energy, value_energy), is_done

@@ -59,7 +59,8 @@ def main(args):
     true_ugm, full_cliques, factors = graph
     # instead of using sum-product to get the unormalized probabilities, use the factors directly to get the energies
     # clique_potentials = get_potential_fns(true_ugm, full_cliques)
-    clique_energies = get_energy_fns(true_ugm, full_cliques)
+    clique_potentials = factors
+    #clique_energies = get_energy_fns(true_ugm, full_cliques)
 
     # Create the environment
     # TODO:
@@ -114,7 +115,7 @@ def main(args):
             actions, key, logs = gflownet.act(
                 params, key, observations, epsilon, args.x_dim, args.K
             )  # TODO:
-            next_observations, rewards, dones = env.step(
+            next_observations, energies, dones = env.step(
                 np.asarray(actions)[np.newaxis, ...]
             )
             replay.add(  # TODO:
@@ -122,7 +123,7 @@ def main(args):
                 actions,
                 logs["is_exploration"],
                 next_observations,
-                rewards,
+                energies,
                 dones,
             )
 

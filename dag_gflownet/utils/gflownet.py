@@ -93,12 +93,12 @@ def detailed_balance_loss(
 
 
 def detailed_balance_loss_free_energy_to_go(
-    log_fetg_t, log_fetg_tp1, log_pf, log_pb, partial_rewards, delta=1.0
+    log_fetg_t, log_fetg_tp1, log_pf, log_pb, partial_energies, delta=1.0
 ):
     r"""Detailed balance loss using free energy to go.
 
     This function computes the detailed balance loss, in the specific case
-    where the reward is decomposable and we never terminate.
+    where the energy is decomposable and we never terminate.
 
     In practice, to avoid gradient explosion, we use the Huber loss instead
     of the L2-loss (the L2-loss can be emulated with a large value of delta).
@@ -121,8 +121,8 @@ def detailed_balance_loss_free_energy_to_go(
     log_pb : jnp.DeviceArray
         log P_{\theta}(s_{t} \mid s_{t+1})
 
-    partial_rewards : jnp.DeviceArray
-        Partial rewards. This array has size `(B, 1)`, where
+    partial_energies : jnp.DeviceArray
+        Partial energies. This array has size `(B, 1)`, where
         `B` is the batch-size.
 
     delta : float (default: 1.)
@@ -137,7 +137,7 @@ def detailed_balance_loss_free_energy_to_go(
         Additional information for logging purposes.
     """
     error = (
-        jnp.squeeze(partial_rewards, axis=-1)
+        jnp.squeeze(-partial_energies, axis=-1)
         + log_pb
         - log_pf
         + log_fetg_t

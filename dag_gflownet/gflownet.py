@@ -15,7 +15,7 @@ from dag_gflownet.utils.gflownet import (
     detailed_balance_loss_free_energy_to_go,
 )
 from dag_gflownet.utils.jnp_utils import batch_random_choice
-from dag_gflownet.utils.data import get_value_policy_reward
+from dag_gflownet.utils.data import get_value_policy_energy
 
 GFlowNetParameters = namedtuple("GFlowNetParameters", ["clique_model", "value_model"])
 
@@ -79,16 +79,16 @@ class DAGGFlowNet:
             x_dim,
             K,
         )
-        value_rewards = samples[
-            "value_rewards"
-        ]  # TODO: I think that here you mean value_rewards
+        value_energies = samples[
+            "value_energies"
+        ]  # TODO: I think that here you mean value_energies
 
         return detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,
             log_fetg_tp1=log_fetg_tp1,
             log_pf=log_pf,
             log_pb=log_pb,
-            partial_rewards=value_rewards,
+            partial_energies=value_energies,
             delta=self.delta,
         )
 

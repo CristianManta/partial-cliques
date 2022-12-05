@@ -43,7 +43,7 @@ def to_graphs_tuple(
         if a value has been sampled for each observed variable, and
         if so, what that value is.
         The third iterable is binary and denotes if a variable has
-        never been cashed out as a part of a reward term.
+        never been cashed out as a part of a energy term.
     K : int
         The number of possible values.
     pad : bool, optional

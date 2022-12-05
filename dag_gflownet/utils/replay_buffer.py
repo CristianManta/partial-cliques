@@ -26,8 +26,8 @@ class ReplayBuffer:
                 ("actions", np.int_, (2,)),
                 ("is_exploration", np.bool_, (1,)),
                 ("done", np.bool_, (1,)),
-                ("value_rewards", np.float_, (1,)),
-                ("var_rewards", np.float_, (1,)),
+                ("value_energies", np.float_, (1,)),
+                ("var_energies", np.float_, (1,)),
                 ("mask", np.uint8, (num_variables,)),
                 ("next_mask", np.uint8, (num_variables,)),
                 ("next_observed", np.bool, (num_variables,)),
@@ -41,10 +41,10 @@ class ReplayBuffer:
         self._prev = np.full((capacity,), -1, dtype=np.int_)
 
     def add(
-        self, observations, actions, is_exploration, next_observations, rewards, dones
+        self, observations, actions, is_exploration, next_observations, energies, dones
     ):
 
-        (var_rewards, value_rewards) = rewards
+        (var_energies, value_energies) = energies
 
         # num_samples = np.sum(~dones)
         add_idx = self._index
@@ -62,8 +62,8 @@ class ReplayBuffer:
             "next_values": next_observations["gfn_state"][1],
             "next_cashed": next_observations["gfn_state"][2],
             "actions": actions,
-            "var_rewards": np.array([var_rewards]),
-            "value_rewards": np.array([value_rewards]),
+            "var_energies": np.array([var_energies]),
+            "value_energies": np.array([value_energies]),
             "mask": observations["mask"],
             "next_mask": next_observations["mask"]
             # Extra keys for monitoring
@@ -101,8 +101,8 @@ class ReplayBuffer:
             ),
             "actions": samples["actions"],
             "done": samples["done"],
-            "var_rewards": samples["var_rewards"],
-            "value_rewards": samples["value_rewards"],
+            "var_energies": samples["var_energies"],
+            "value_energies": samples["value_energies"],
             "mask": samples["mask"],
             "next_mask": samples["next_mask"],
         }
@@ -176,8 +176,8 @@ class ReplayBuffer:
 
         return {
             "graph": Graph(structure=structure_graph, values=value_graph),
-            "value_reward": np.zeros((1, 1), dtype=np.float_),
-            "clique_reward": np.zeros((1, 1), dtype=np.float_),
+            "value_energy": np.zeros((1, 1), dtype=np.float_),
+            "clique_energy": np.zeros((1, 1), dtype=np.float_),
             "mask": np.zeros(
                 (
                     1,

@@ -198,7 +198,7 @@ def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int
         if a value has been sampled for each observed variable, and
         if so, what that value is.
         The third iterable is binary and denotes if a variable has
-        never been cashed out as a part of a reward term.
+        never been cashed out as a part of a energy term.
 
 
     unobserved_cliques : list
@@ -237,7 +237,7 @@ def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int
     return mask
 
 
-def get_value_policy_reward(
+def get_value_policy_energy(
     gfn_state: tuple,
     unobserved_cliques: list,
     full_cliques: list,
@@ -248,7 +248,7 @@ def get_value_policy_reward(
     Given a GFN state, a mutable representation of unfinished cliques,
     a aligned list of clique potential functions, and the number of values
     return a new GFN state, an updated representation of unfinished cliques,
-    and a scalar reward.
+    and a scalar energy.
 
     Inputs
     --------
@@ -259,7 +259,7 @@ def get_value_policy_reward(
         if a value has been sampled for each observed variable, and
         if so, what that value is.
         The third iterable is binary and denotes if a variable has
-        never been cashed out as a part of a reward term.
+        never been cashed out as a part of a energy term.
 
     unobserved_cliques : list
         A list of sets, where each set correspond to a clique. Each
@@ -282,7 +282,7 @@ def get_value_policy_reward(
         After marking the new clique as having been cashed out.
     new_unobserved_cliques : list
         After removing nodes that are fully observed
-    reward : float
+    energy : float
         The energy term associated with the clique that has been cashed out.
     """
     assert len(gfn_state) == 3
@@ -300,22 +300,22 @@ def get_value_policy_reward(
 
     # we cash in every clique we complete and update the GFN state
     num_cliques = len(unobserved_cliques)
-    reward = 0.0
+    energy = 0.0
 
     for c_ind in range(num_cliques):
         if unobserved_cliques[c_ind] in newly_observed_vars:
             new_unobserved_cliques[c_ind] = set()
             gfn_state[2][np.array(list(full_cliques[c_ind]))] = 0
             if isinstance(clique_potentials[c_ind], DiscreteFactor):
-                reward += clique_potentials[c_ind].values[
+                energy -= np.log(clique_potentials[c_ind].values[
                     (tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]))
-                ]
+                ])
             else:
-                reward += clique_potentials[c_ind](
+                energy -= np.log(clique_potentials[c_ind](
                     gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]
-                )
+                ))
 
-    return gfn_state, new_unobserved_cliques, reward
+    return gfn_state, new_unobserved_cliques, energy
 
 
 if __name__ == "__main__":
@@ -350,20 +350,20 @@ if __name__ == "__main__":
     )
     unobserved_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
     full_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
-    new_gfn_state, new_unobserved_cliques, reward = get_value_policy_reward(
+    new_gfn_state, new_unobserved_cliques, energy = get_value_policy_energy(
         gfn_state, unobserved_cliques, full_cliques, clique_potentials, K
     )
-    assert reward == 0.2
+    assert energy == 0.2
     assert len(new_unobserved_cliques[0]) == 0
     gfn_state = (
         np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 1]),
         np.array([1, 1, 0, 2, 0, 2, 0, 1, 0, 1]),
         np.array([0, 0, 0, 1, 1, 1, 0, 0, 0, 0]),
     )
-    new_gfn_state, new_unobserved_cliques, reward = get_value_policy_reward(
+    new_gfn_state, new_unobserved_cliques, energy = get_value_policy_energy(
         gfn_state, unobserved_cliques, full_cliques, clique_potentials, K
     )
-    assert reward == 0.0
+    assert energy == 0.0
 
     # Test potential fns
     model, (full_cliques, _), data = get_random_graph(d=6, D=4, n=4)
@@ -375,14 +375,14 @@ if __name__ == "__main__":
     )
 
     clique_potentials = get_potential_fns(model, unobserved_cliques)
-    new_gfn_state, new_unobserved_cliques, reward = get_value_policy_reward(
+    new_gfn_state, new_unobserved_cliques, energy = get_value_policy_energy(
         gfn_state, unobserved_cliques, full_cliques, clique_potentials, K
     )
 
-    target_reward = 0
+    target_energy = 0
     for c_ind, c in enumerate(new_unobserved_cliques):
         if len(c) == 0:
-            target_reward += clique_potentials[c_ind].values[
+            target_energy += clique_potentials[c_ind].values[
                 (tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]))
             ]
-    assert reward == target_reward
+    assert energy == target_energy

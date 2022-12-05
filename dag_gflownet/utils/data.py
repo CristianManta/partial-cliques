@@ -108,13 +108,9 @@ def get_random_graph(d, D, n, rng):
         )
         for clique in cliques
     ]
-<<<<<<< Updated upstream
-    cliques = [  # TODO: (Cristian) I don't understand how the conversion is done from line 103 to line 112 (inspect with debugger)
-        set(get_index_rep(clique, model)) - set(get_index_rep(obs_nodes, model))
-=======
-    cliques = [ # TODO: (Cristian) I don't understand how the conversion is done from line 103 to line 112 (inspect with debugger)
-        get_index_rep(clique, model) - set(get_index_rep(obs_nodes, model))
->>>>>>> Stashed changes
+
+    cliques = [
+        get_index_rep(clique, model) - get_index_rep(obs_nodes, model)
         for clique in cliques
     ]
 

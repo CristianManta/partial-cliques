@@ -66,7 +66,7 @@ def get_data(name, args, rng=default_rng()):
 
     elif name == "random_latent_graph":
         graph, (cliques, factors), data = get_random_graph(
-            d=args.x_dim, D=args.h_dim, n=args.num_samples
+            d=args.x_dim, D=args.h_dim, n=args.num_samples, rng=rng
         )
         graph = (graph, cliques, factors)
         score = None
@@ -81,10 +81,9 @@ def get_random_graph(d, D, n, rng):
     obs_nodes = ["x" + str(i) for i in range(D)]
     # Random Graph
     edges = []
-    is_edge_list = rng.binomial(1, 0.6, 2**d)
+    is_edge_list = rng.binomial(1, 0.6, d**2)
     model = MarkovNetwork()
     model.add_nodes_from(latent_nodes + obs_nodes)
-
     for e0_idx in range(d):
         for e1_idx in range(d):
             if is_edge_list[e0_idx * d + e1_idx] and e0_idx != e1_idx:
@@ -109,7 +108,7 @@ def get_random_graph(d, D, n, rng):
         )
         for clique in cliques
     ]
-    cliques = [ # TODO: (Cristian) I don't understand how the conversion is done from line 103 to line 112 (inspect with debugger)
+    cliques = [  # TODO: (Cristian) I don't understand how the conversion is done from line 103 to line 112 (inspect with debugger)
         set(get_index_rep(clique, model)) - set(get_index_rep(obs_nodes, model))
         for clique in cliques
     ]
@@ -153,6 +152,31 @@ def get_potential_fns(model: MarkovNetwork, unobserved_cliques: list):
         )
 
     return clique_potentials
+
+
+def get_energy_fns(model: MarkovNetwork, full_cliques: list):
+    """
+    Given the markov model and a mutable representation of unfinished cliques,
+    return a list of energy functions.
+
+    Inputs
+    --------
+    model : MarkovNetwork
+
+    full_cliques : list
+        A list of sets, where each set correspond to a clique. Each
+        variable is represented by its index, an integer.
+
+    Outputs
+    --------
+    clique_energies : list
+        A list of energy functions for full_cliques
+    """
+    clique_energies = []
+    for c_ind in range(len(full_cliques)):
+        clique_energies.append(-np.log(model.factors[c_ind].values))
+
+    return clique_energies
 
 
 def get_index_rep(nodes, model):

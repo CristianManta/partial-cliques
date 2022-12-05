@@ -14,7 +14,7 @@ from dag_gflownet.env import GFlowNetDAGEnv
 from dag_gflownet.gflownet import DAGGFlowNet
 from dag_gflownet.utils.replay_buffer import ReplayBuffer
 from dag_gflownet.utils.factories import get_scorer
-from dag_gflownet.utils.data import get_data, get_potential_fns
+from dag_gflownet.utils.data import get_data, get_potential_fns, get_energy_fns
 from dag_gflownet.utils.gflownet import posterior_estimate
 from dag_gflownet.utils.metrics import (
     expected_shd,
@@ -58,7 +58,8 @@ def main(args):
     # latent_data, obs_data = data
     true_ugm, full_cliques, factors = graph
     # instead of using sum-product to get the unormalized probabilities, use the factors directly to get the energies
-    clique_potentials = get_potential_fns(true_ugm, full_cliques)
+    # clique_potentials = get_potential_fns(true_ugm, full_cliques)
+    clique_energies = get_energy_fns(true_ugm, full_cliques)
 
     # Create the environment
     # TODO:

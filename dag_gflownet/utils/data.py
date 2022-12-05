@@ -76,12 +76,12 @@ def get_data(name, args, rng=default_rng()):
     return graph, data, score
 
 
-def get_random_graph(d, D, n):
+def get_random_graph(d, D, n, rng):
     latent_nodes = ["h" + str(i) for i in range(d)]
     obs_nodes = ["x" + str(i) for i in range(D)]
     # Random Graph
     edges = []
-    is_edge_list = np.random.binomial(1, 0.6, 2**d)
+    is_edge_list = rng.binomial(1, 0.6, 2**d)
     model = MarkovNetwork()
     model.add_nodes_from(latent_nodes + obs_nodes)
 
@@ -105,11 +105,14 @@ def get_random_graph(d, D, n):
         DiscreteFactor(
             list(clique),
             [2] * len(list(clique)),
-            np.random.rand(2 ** (len(list(clique)))),
+            rng.random(2 ** (len(list(clique)))),
         )
         for clique in cliques
     ]
-    cliques = [set(get_index_rep(clique, model)) for clique in cliques]
+    cliques = [ # TODO: (Cristian) I don't understand how the conversion is done from line 103 to line 112 (inspect with debugger)
+        set(get_index_rep(clique, model)) - set(get_index_rep(obs_nodes, model))
+        for clique in cliques
+    ]
 
     model.add_factors(*factors_list)
     gibbs = GibbsSampling(model)
@@ -203,7 +206,10 @@ def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int
     eligible_vars = set().union(*eligible_cliques) - set(active_vars)
 
     mask = np.zeros(N)
-    mask[np.array(list(eligible_vars))] = 1
+    if len(eligible_vars) == 0:
+        mask = 1 - gfn_state[0]
+    else:
+        mask[np.array(list(eligible_vars))] = 1
     return mask
 
 
@@ -266,18 +272,16 @@ def get_value_policy_reward(
 
     # we remove fully observed nodes
     newly_observed_vars = set(np.nonzero(gfn_state[0] & gfn_state[2])[0].flatten())
-    new_unobserved_cliques = [c - newly_observed_vars for c in unobserved_cliques]
+    new_unobserved_cliques = [c for c in unobserved_cliques]
 
     # we cash in every clique we complete and update the GFN state
     num_cliques = len(unobserved_cliques)
     reward = 0.0
 
     for c_ind in range(num_cliques):
-        if (
-            len(new_unobserved_cliques[c_ind]) == 0
-            and len(unobserved_cliques[c_ind]) != 0
-        ):
-            gfn_state[2][np.array(list(unobserved_cliques[c_ind]))] = 0
+        if unobserved_cliques[c_ind] in newly_observed_vars:
+            new_unobserved_cliques[c_ind] = set()
+            gfn_state[2][np.array(list(full_cliques[c_ind]))] = 0
             if isinstance(clique_potentials[c_ind], DiscreteFactor):
                 reward += clique_potentials[c_ind].values[
                     (tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]))

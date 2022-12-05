@@ -7,10 +7,17 @@ from copy import deepcopy
 from gym.spaces import Dict, Box, Discrete
 
 from dag_gflownet.utils.cache import LRUCache
+from dag_gflownet.utils.data import (
+    get_value_policy_reward,
+    get_potential_fns,
+    get_clique_selection_mask,
+)
 
 
 class GFlowNetDAGEnv(gym.vector.VectorEnv):
-    def __init__(self, num_envs, h_dim, x_dim, K, graph, data):
+    def __init__(
+        self, num_envs, h_dim, x_dim, K, graph, full_cliques, clique_potentials, data
+    ):
         """GFlowNet environment for learning a distribution over DAGs.
 
         Parameters
@@ -37,6 +44,8 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         self.K = K
         self.num_variables = h_dim + x_dim
         self.graph = graph
+        self.full_cliques = full_cliques
+        self.clique_potentials = clique_potentials
         self.data = np.array(data)
 
         # TODO: Change this to the appropriate obs space
@@ -51,21 +60,66 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
     def reset(self):
         observed = np.zeros(self.num_variables, dtype=int)
         observed[self.h_dim :] = 1
-        values = np.array([2] * self.num_variables)
+        values = np.array([self.K] * self.num_variables)
         values[self.h_dim :] = self.data[
-            0, self.h_dim :
-        ]  # TODO: Parallel envs based on each data sample?
+            np.random.randint(self.data.shape[0]),
+            self.h_dim :,
+        ]
         gfn_state = (
             observed,
             values,
             np.ones(self.num_variables, dtype=int),
         )
+        # mark x as cashed
+        gfn_state[2][self.h_dim :] = 0
         self._state = {
             "gfn_state": gfn_state,
             "mask": np.ones(shape=(1, self.num_variables), dtype=int),
+            "unobserved_cliques": deepcopy(self.full_cliques),
+            "is_done": False,
         }
+        # mark x as observed and not eligible for sampling
+        self._state["mask"][0, self.h_dim :] = 0
         return deepcopy(self._state)
 
     def step(self, actions):
-        # TODO: Update current state given batch of actions
-        raise NotImplementedError
+        # we use the convention that if actions[0][0] == -1, we terminate
+        assert len(actions.shape) == 2
+        assert actions.shape[0] == 1
+        assert actions.shape[1] == 2
+        obs_var = actions[0, 0]
+        obs_value = actions[0, 1]
+        if obs_var == -1:
+            self._state["is_done"] = True
+
+            mi_reward = 0.0  # TODO:
+            value_reward = 0  # TODO: calculate partial reward by merging cliques
+
+            return (
+                deepcopy(self._state),
+                (mi_reward, value_reward),
+                self._state["is_done"],
+            )
+        is_done = False
+        assert self._state["mask"][0, obs_var] == 1
+        assert self._state["gfn_state"][0][obs_var] == 0
+        self._state["gfn_state"][0][obs_var] = 1
+        self._state["gfn_state"][1][obs_var] = obs_value
+        var_reward = 0.0  # TODO
+
+        self._state["mask"] = np.array(
+            get_clique_selection_mask(
+                self._state["gfn_state"], self._state["unobserved_cliques"], self.K
+            )
+        )[np.newaxis, ...]
+        new_gfn_state, unobserved_cliques, value_reward = get_value_policy_reward(
+            self._state["gfn_state"],
+            self._state["unobserved_cliques"],
+            self.full_cliques,
+            self.clique_potentials,
+            self.K,
+        )
+        self._state["unobserved_cliques"] = unobserved_cliques
+        self._state["gfn_state"] = new_gfn_state
+
+        return deepcopy(self._state), (var_reward, value_reward), is_done

@@ -137,12 +137,15 @@ def detailed_balance_loss_free_energy_to_go(
         Additional information for logging purposes.
     """
     error = (
-        jnp.squeeze(partial_rewards + log_pb - log_pf, axis=-1)
-        + log_fetg_t[:, -1]
-        - log_fetg_tp1[:, -1]
+        jnp.squeeze(partial_rewards, axis=-1)
+        + log_pb
+        - log_pf
+        + log_fetg_t
+        - log_fetg_tp1
     )
     loss = jnp.mean(optax.huber_loss(error, delta=delta))
-
+    # if loss > 100:
+    #    breakpoint()
     logs = {
         "error": error,
         "loss": loss,

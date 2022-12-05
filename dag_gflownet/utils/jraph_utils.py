@@ -57,6 +57,13 @@ def to_graphs_tuple(
         Representation of the state containing the two GraphsTuples:
         one for the values and one for the structure.
     """
+    squeezed_states = []
+    for i in range(len(gfn_state)):
+        squeezed_states.append(np.squeeze(gfn_state[i]))
+        assert len(squeezed_states[i].shape) == 1
+
+    gfn_state = (squeezed_states[0], squeezed_states[1], squeezed_states[2])
+
     num_variables = gfn_state[0].shape[0]
     structure_node_features = np.arange(num_variables)
     structure_node_features = np.where(

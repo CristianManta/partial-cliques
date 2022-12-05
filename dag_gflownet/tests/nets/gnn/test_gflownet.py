@@ -43,17 +43,38 @@ def test_clique_policy_shapes_jit(setup):
 
     # Initializing the model
     model = hk.without_apply_rng(hk.transform(clique_policy))
-    params = model.init(key, graphs, masks, x_dim, K)
+    sampling_method = 1
+    params = model.init(key, graphs, masks, x_dim, K, sampling_method)
 
     # Applying the model
-    forward = jax.jit(model.apply, static_argnums=(3, 4))
-    log_policy_cliques = forward(params, graphs, masks, x_dim, K)
+    forward = jax.jit(model.apply, static_argnums=(3, 4, 5))
+    log_policy_cliques = forward(params, graphs, masks, x_dim, K, sampling_method)
+
+    assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] - x_dim + 1)
+
+    sampling_method = 2
+    params = model.init(key, graphs, masks, x_dim, K, sampling_method)
+
+    # Applying the model
+    forward = jax.jit(model.apply, static_argnums=(3, 4, 5))
+    log_policy_cliques = forward(params, graphs, masks, x_dim, K, sampling_method)
+
+    assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] - x_dim + 1)
+
+    sampling_method = 3
+    params = model.init(key, graphs, masks, x_dim, K, sampling_method)
+
+    # Applying the model
+    forward = jax.jit(model.apply, static_argnums=(3, 4, 5))
+    log_policy_cliques = forward(params, graphs, masks, x_dim, K, sampling_method)
 
     assert log_policy_cliques.shape == (masks.shape[0], masks.shape[1] - x_dim + 1)
 
 
 def test_value_policy_shapes_jit(setup):
     graphs, masks, x_dim, K = setup
+    graphs.values.nodes[1] = masks.shape[1] + K + 1 # Let's say that we want to sample the value for node at index 1
+    graphs.structure.nodes[1] = 1
     seed = 0
     key = random.PRNGKey(seed)
 
@@ -65,5 +86,5 @@ def test_value_policy_shapes_jit(setup):
     forward = jax.jit(model.apply, static_argnums=(3, 4))
     log_policy_values, log_flows = forward(params, graphs, masks, x_dim, K)
 
-    assert log_policy_values.shape == (masks.shape[0],)
+    assert log_policy_values.shape == (masks.shape[0], K)
     assert log_flows.shape == (masks.shape[0],)

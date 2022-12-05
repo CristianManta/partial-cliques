@@ -13,8 +13,16 @@
             "justMyCode": false,
             "autoReload": {
                 "enable": true
-              },            
-            "args": ["--off_wandb", "--batch_size", "256", "--num_variables", "5", "--num_samples", "100"]
+            },
+            "args": [
+                "--off_wandb",
+                "--batch_size",
+                "256",
+                "--num_variables",
+                "5",
+                "--num_samples",
+                "100"
+            ]
         },
         {
             "name": "Python: Debug tests",
@@ -25,8 +33,8 @@
             "justMyCode": true,
             "autoReload": {
                 "enable": true
-              },
-            "purpose": ["debug-test"]            
+            },
+            "purpose": ["debug-test"]
         },
         {
             "name": "Python: Debug helper fns",
@@ -34,7 +42,7 @@
             "request": "launch",
             "module": "dag_gflownet.utils.data",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": true
         },
         {
             "name": "Python: train.py",
@@ -43,10 +51,23 @@
             "program": "./train.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args":["--num_samples", "1",
-                    "--x_dim", "4",
-                    "--h_dim", "8",
-                    "--K", "2"]
+            "args": [
+                "--off_wandb",
+                "--prefill",
+                "30",
+                "--batch_size",
+                "1",
+                "--num_samples",
+                "1",
+                "--x_dim",
+                "4",
+                "--h_dim",
+                "8",
+                "--K",
+                "2",
+                "--seed",
+                "24329"
+            ]
         }
-    ]   
+    ]
 }

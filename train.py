@@ -66,6 +66,8 @@ def main(args):
         num_envs=args.num_envs,
         h_dim=args.h_dim,
         x_dim=args.x_dim,
+        clique_potentials=clique_potentials,
+        full_cliques=full_cliques,
         K=args.K,
         graph=true_ugm,
         data=data,
@@ -73,13 +75,14 @@ def main(args):
 
     # Create the replay buffer
     replay = ReplayBuffer(  # TODO: Implement replay buffer
-        args.replay_capacity, num_variables=args.h_dim + args.x_dim
+        args.replay_capacity,
+        full_cliques,
+        args.K,
+        num_variables=args.h_dim + args.x_dim,
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(
-        delta=args.delta, clique_potentials=clique_potentials, full_cliques=full_cliques
-    )
+    gflownet = DAGGFlowNet(delta=args.delta, x_dim=args.x_dim, h_dim=args.h_dim)
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
         subkey,
@@ -99,26 +102,33 @@ def main(args):
     )
 
     # Training loop
-    indices = None
     observations = env.reset()
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
-            observations["graphs_tuple"] = to_graphs_tuple(observations["gfn_state"])
+            observations["graphs_tuple"] = to_graphs_tuple(
+                full_cliques, observations["gfn_state"], args.K
+            )
             actions, key, logs = gflownet.act(
                 params, key, observations, epsilon, args.x_dim, args.K
             )  # TODO:
-            next_observations, dones = env.step(np.asarray(actions))
-            indices = replay.add(  # TODO:
+            next_observations, rewards, dones = env.step(
+                np.asarray(actions)[np.newaxis, ...]
+            )
+            replay.add(  # TODO:
                 observations,
                 actions,
                 logs["is_exploration"],
                 next_observations,
+                rewards,
                 dones,
-                prev_indices=indices,
             )
-            observations = next_observations
+
+            if dones:
+                observations = env.reset()
+            else:
+                observations = next_observations
 
             if iteration >= args.prefill:
                 # Update the parameters of the GFlowNet

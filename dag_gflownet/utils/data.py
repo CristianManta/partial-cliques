@@ -65,10 +65,10 @@ def get_data(name, args, rng=default_rng()):
         score = "bde"
 
     elif name == "random_latent_graph":
-        graph, cliques, data = get_random_graph(
+        graph, (cliques, factors), data = get_random_graph(
             d=args.x_dim, D=args.h_dim, n=args.num_samples
         )
-        graph = (graph, cliques)
+        graph = (graph, cliques, factors)
         score = None
     else:
         raise ValueError(f"Unknown graph type: {name}")
@@ -115,7 +115,7 @@ def get_random_graph(d, D, n):
     gibbs = GibbsSampling(model)
     data = gibbs.sample(size=n)
 
-    return model, cliques, data
+    return model, (cliques, factors_list), data
 
 
 def get_potential_fns(model: MarkovNetwork, unobserved_cliques: list):
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     assert reward == 0.0
 
     # Test potential fns
-    model, full_cliques, data = get_random_graph(d=6, D=4, n=4)
+    model, (full_cliques, _), data = get_random_graph(d=6, D=4, n=4)
     unobserved_cliques = full_cliques.copy()
     gfn_state = (
         np.array([1, 1, 1, 0, 0, 0, 1, 1, 1, 1]),

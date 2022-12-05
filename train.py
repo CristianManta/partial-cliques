@@ -56,7 +56,8 @@ def main(args):
     # TODO:
     graph, data, _ = get_data("random_latent_graph", args, rng=rng)
     # latent_data, obs_data = data
-    true_ugm, full_cliques = graph
+    true_ugm, full_cliques, factors = graph
+    # instead of using sum-product to get the unormalized probabilities, use the factors directly to get the energies
     clique_potentials = get_potential_fns(true_ugm, full_cliques)
 
     # Create the environment

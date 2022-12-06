@@ -52,6 +52,7 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
+                "--off_wandb",
                 "--prefill",
                 "100",
                 "--num_iterations",

@@ -39,8 +39,6 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
         the mask for sampling, ignoring the learned policy.
         3: "uniform": Choose the node to sample according to an uniform distribution
         among the eligible nodes (according to the mask), ignoring the learned policy.
-
-
     Returns
     -------
     log_policy_cliques: jnp.DeviceArray of shape (batch_size, num_actions) =
@@ -49,13 +47,15 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
     """
 
     assert K == 2
-    masks = jnp.stack(masks, axis=0)
-    batch_size = masks.shape[0]
-    num_variables = masks.shape[1]
+
+    batch_size, num_variables = masks.shape
     h_dim = num_variables - x_dim
     masks = masks[:, :h_dim]
 
-    if sampling_method == 2:
+    if (
+        sampling_method == 2
+    ):  # NOTE: This section has not been tested on batch_size != 1
+        assert batch_size == 1
         masking_value = -1e5
         stop = jnp.full((batch_size, 1), masking_value, dtype=float)
         first_available_node_ix = jnp.where(masks, size=1)[1]
@@ -82,22 +82,15 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
         "edge_embed", shape=(1, 128), init=hk.initializers.TruncatedNormal()
     )
 
-    structural_embeddings = jnp.stack(
-        [node_embeddings_list(graph.structure.nodes) for graph in graphs], axis=0
-    )
-    value_embeddings = jnp.stack(
-        [node_embeddings_list(graph.values.nodes) for graph in graphs], axis=0
-    )
+    structural_embeddings = node_embeddings_list(graphs.structure.nodes)
+    value_embeddings = node_embeddings_list(graphs.values.nodes)
     node_embeddings = structural_embeddings + value_embeddings
 
-    graphs = [
-        graph.structure._replace(
-            nodes=node_embeddings[i],
-            edges=jnp.repeat(edge_embedding, graph.structure.edges.shape[0], axis=0),
-            globals=jnp.zeros((graph.structure.n_node.shape[0], 1)),
-        )
-        for i, graph in enumerate(graphs)
-    ]
+    graphs = graphs.structure._replace(
+        nodes=node_embeddings,
+        edges=jnp.repeat(edge_embedding, graphs.structure.edges.shape[0], axis=0),
+        globals=jnp.zeros((graphs.structure.n_node.shape[0], 1)),
+    )
 
     # Define graph network updates
     @jraph.concatenated_args
@@ -117,12 +110,10 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
         update_node_fn=update_node_fn,
         update_global_fn=update_global_fn,
     )
-    features = [graph_net(graph) for graph in graphs]
+    features = graph_net(graphs)
 
     # node_features = features.nodes[:batch_size * num_variables]
-    global_features = jnp.stack([feature.globals for feature in features], axis=0)[
-        :batch_size, :
-    ]
+    global_features = features.globals[:batch_size]
 
     # Reshape the node features, and project into keys, queries & values
     # node_features = node_features.reshape(batch_size, num_variables, -1)
@@ -170,19 +161,16 @@ def value_policy(graphs, masks, x_dim, K):
         Number of low-level variables.
     K: int
         Number of different discrete values that the nodes can take.
-
-
     Returns
     -------
     log_policy_values: jnp.DeviceArray of shape (batch_size,)
         Log probabilities of the sampled value being 1.
-
     log_flows: jnp.DeviceArray of shape (batch_size,)
         Estimated log flow passing through the current state.
     """
 
     assert K == 2
-    masks = jnp.stack(masks, axis=0)
+
     batch_size, num_variables = masks.shape
     h_dim = num_variables - x_dim
     masks = masks[:, :h_dim]
@@ -201,22 +189,15 @@ def value_policy(graphs, masks, x_dim, K):
         "edge_embed", shape=(1, 128), init=hk.initializers.TruncatedNormal()
     )
 
-    structural_embeddings = jnp.stack(
-        [node_embeddings_list(graph.structure.nodes) for graph in graphs], axis=0
-    )
-    value_embeddings = jnp.stack(
-        [node_embeddings_list(graph.values.nodes) for graph in graphs], axis=0
-    )
+    structural_embeddings = node_embeddings_list(graphs.structure.nodes)
+    value_embeddings = node_embeddings_list(graphs.values.nodes)
     node_embeddings = structural_embeddings + value_embeddings
 
-    graphs_tuple = [
-        graph.values._replace(
-            nodes=node_embeddings[i],
-            edges=jnp.repeat(edge_embedding, graph.values.edges.shape[0], axis=0),
-            globals=jnp.zeros((graph.values.n_node.shape[0], 1)),
-        )
-        for i, graph in enumerate(graphs)
-    ]
+    graphs_tuple = graphs.values._replace(
+        nodes=node_embeddings,
+        edges=jnp.repeat(edge_embedding, graphs.values.edges.shape[0], axis=0),
+        globals=jnp.zeros((graphs.values.n_node.shape[0], 1)),
+    )
 
     # Define graph network updates
     @jraph.concatenated_args
@@ -236,14 +217,10 @@ def value_policy(graphs, masks, x_dim, K):
         update_node_fn=update_node_fn,
         update_global_fn=update_global_fn,
     )
-    features = [graph_net(gt) for gt in graphs_tuple]
+    features = graph_net(graphs_tuple)
 
-    node_features = jnp.stack([feature.nodes for feature in features], axis=0)[
-        :, : batch_size * num_variables, :
-    ]
-    global_features = jnp.stack([feature.globals for feature in features], axis=0)[
-        :, :batch_size, :
-    ]
+    node_features = features.nodes[: batch_size * num_variables]
+    global_features = features.globals[:batch_size]
 
     # Project the nodes features into keys, queries & values
     node_features = hk.Linear(128 * 3, name="projection")(node_features)
@@ -258,12 +235,8 @@ def value_policy(graphs, masks, x_dim, K):
         node_features
     )  # Assumption that k = 2 here (last layer)
     # all_logits = jnp.squeeze(all_logits)
-    targets = jnp.stack(
-        [
-            graph.values.nodes[: batch_size * num_variables] == current_sampling_feature
-            for graph in graphs
-        ],
-        axis=0,
+    targets = (
+        graphs.values.nodes[: batch_size * num_variables] == current_sampling_feature
     )  # target nodes to fill values
 
     targets_ix = jnp.nonzero(targets, size=batch_size)

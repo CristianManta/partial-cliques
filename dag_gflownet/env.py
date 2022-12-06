@@ -136,6 +136,6 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             )
             var_energies.append(var_energy)
             value_energies.append(value_energy)
-            dones.append(False)
+            dones.append([False])
 
         return deepcopy(self._state), (var_energies, value_energies), dones

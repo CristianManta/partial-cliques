@@ -9,9 +9,9 @@ Graph = namedtuple("Graph", ["structure", "values"])
 
 
 def to_graphs_tuple(
-    full_cliques: list, gfn_state: tuple, K: int, pad: bool = True
+    full_cliques: list, gfn_states: list, K: int, pad: bool = True
 ) -> Graph:
-    """Converts a tuple representation of the GFN state into a `Graph` object
+    """Converts a list of tuple representations of the GFN state into a `Graph` object
     compatible with the input type of the clique and value policies.
 
     We use the following conversion table to decide the .node attribute
@@ -58,68 +58,75 @@ def to_graphs_tuple(
         one for the values and one for the structure.
     """
     squeezed_states = []
-    for i in range(len(gfn_state)):
-        squeezed_states.append(np.squeeze(gfn_state[i]))
-        assert len(squeezed_states[i].shape) == 1
+    structure_graphs = []
+    value_graphs = []
+    for gfn_state in gfn_states:
+        for i in range(len(gfn_state)):
+            squeezed_states.append(np.squeeze(gfn_state[i]))
+            assert len(squeezed_states[i].shape) == 1
 
-    gfn_state = (squeezed_states[0], squeezed_states[1], squeezed_states[2])
+        gfn_state = (squeezed_states[0], squeezed_states[1], squeezed_states[2])
 
-    num_variables = gfn_state[0].shape[0]
-    structure_node_features = np.arange(num_variables)
-    structure_node_features = np.where(
-        gfn_state[0] == 0, num_variables + K, structure_node_features
+        num_variables = gfn_state[0].shape[0]
+        structure_node_features = np.arange(num_variables)
+        structure_node_features = np.where(
+            gfn_state[0] == 0, num_variables + K, structure_node_features
+        )
+
+        edges = []
+        for clique in full_cliques:
+            clique_edges = permutations(clique, r=2)
+            edges.extend(clique_edges)
+
+        """
+        Filtering out duplicate edges, which can happen if two cliques have edges in common. 
+        Then sorting in ascending order of senders.
+        """
+        edges = list(set(edges))
+        edges.sort(key=lambda x: x[0])
+        senders, receivers = zip(*edges)
+
+        edge_features = np.ones_like(senders)
+
+        structure_graph = jraph.GraphsTuple(
+            nodes=structure_node_features,
+            edges=edge_features,
+            senders=np.array(senders),
+            receivers=np.array(receivers),
+            globals=None,
+            n_node=np.array([num_variables]),
+            n_edge=np.array([len(edges)]),
+        )
+
+        """
+        Values need to have distinct embeddings than positions. Hence we shift 
+        everything by num_variables
+        """
+        value_node_features = np.array(gfn_state[1]) + num_variables
+        value_graph = jraph.GraphsTuple(
+            nodes=value_node_features,
+            edges=edge_features,
+            senders=np.array(senders),
+            receivers=np.array(receivers),
+            globals=None,
+            n_node=np.array([num_variables]),
+            n_edge=np.array([len(edges)]),
+        )
+        if pad:
+            # Necessary to avoid changing shapes too often, which triggers jax re-compilation
+            structure_graph = pad_graph_to_nearest_power_of_two(structure_graph)
+            value_graph = pad_graph_to_nearest_power_of_two(value_graph)
+
+            structure_graph.nodes[num_variables:] = (
+                num_variables + K
+            )  # Index signaling dummy embedding
+            value_graph.nodes[num_variables:] = num_variables + K
+        structure_graphs.append(structure_graph)
+        value_graphs.append(value_graph)
+
+    return Graph(
+        structure=jraph.batch(structure_graphs), values=jraph.batch(value_graphs)
     )
-
-    edges = []
-    for clique in full_cliques:
-        clique_edges = permutations(clique, r=2)
-        edges.extend(clique_edges)
-
-    """
-    Filtering out duplicate edges, which can happen if two cliques have edges in common. 
-    Then sorting in ascending order of senders.
-    """
-    edges = list(set(edges))
-    edges.sort(key=lambda x: x[0])
-    senders, receivers = zip(*edges)
-
-    edge_features = np.ones_like(senders)
-
-    structure_graph = jraph.GraphsTuple(
-        nodes=structure_node_features,
-        edges=edge_features,
-        senders=np.array(senders),
-        receivers=np.array(receivers),
-        globals=None,
-        n_node=np.array([num_variables]),
-        n_edge=np.array([len(edges)]),
-    )
-
-    """
-    Values need to have distinct embeddings than positions. Hence we shift 
-    everything by num_variables
-    """
-    value_node_features = np.array(gfn_state[1]) + num_variables
-    value_graph = jraph.GraphsTuple(
-        nodes=value_node_features,
-        edges=edge_features,
-        senders=np.array(senders),
-        receivers=np.array(receivers),
-        globals=None,
-        n_node=np.array([num_variables]),
-        n_edge=np.array([len(edges)]),
-    )
-    if pad:
-        # Necessary to avoid changing shapes too often, which triggers jax re-compilation
-        structure_graph = pad_graph_to_nearest_power_of_two(structure_graph)
-        value_graph = pad_graph_to_nearest_power_of_two(value_graph)
-
-        structure_graph.nodes[num_variables:] = (
-            num_variables + K
-        )  # Index signaling dummy embedding
-        value_graph.nodes[num_variables:] = num_variables + K
-
-    return Graph(structure=structure_graph, values=value_graph)
 
 
 def _nearest_bigger_power_of_two(x):

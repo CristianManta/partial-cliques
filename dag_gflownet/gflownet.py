@@ -72,10 +72,25 @@ class DAGGFlowNet:
 
         log_pf = log_probs_values[0, samples["actions"][0, 1]]
         log_pb = jnp.where(
-            samples["done"],
+            samples["dones"],
             0,
-            jnp.log(1 / (samples["next_observed"].sum(axis=-1) - self.x_dim)),
+            jnp.log(
+                1
+                / (
+                    samples["next_observed"].sum(axis=-1, keepdims=True)
+                    - self.x_dim
+                    + 1e-8
+                )
+            ),
         )
+        """
+        if (
+            jnp.any(jnp.isnan(log_pb))
+            or jnp.any(jnp.isinf(log_pb))
+            or jnp.any(log_pb > 10000)
+        ):
+            raise NotImplementedError
+        """
         log_fetg_t = value_log_flows
         _, log_fetg_tp1 = self.value_model.apply(
             params.value_model,
@@ -121,7 +136,7 @@ class DAGGFlowNet:
         # Sample actions
         # clique_policy_actions = batch_random_choice(subkey2, jnp.exp(log_probs_clique), masks)
         clique_actions = jax.random.categorical(
-            subkey1, log_probs_clique[:, 0] / 999
+            subkey1, log_probs_clique / 999
         )  # a single integer between 0 and h_dim
 
         """
@@ -134,8 +149,11 @@ class DAGGFlowNet:
             actions = np.array([-1, -1])
             return actions, key, logs
         """
-        for graph in graphs:
-            graph.values.nodes[clique_actions] = self.N + K + 1
+        for i in range(batch_size):
+            new_nodes = graphs.values.nodes.at[i * batch_size + clique_actions[i]].set(
+                self.N + K + 1
+            )
+            graphs.values._replace(nodes=new_nodes)
 
         # use the value GFN to sample a value for the variable we just observed
         log_probs_value, log_flow = self.value_model.apply(
@@ -153,7 +171,7 @@ class DAGGFlowNet:
         }
         return (actions, key, logs)
 
-    # @partial(jit, static_argnums=(0, 4, 5))
+    @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

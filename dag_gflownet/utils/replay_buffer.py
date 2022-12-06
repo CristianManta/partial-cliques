@@ -104,20 +104,18 @@ class ReplayBuffer:
         # store the graphs tuples using replay.add directly by storing each
         # of its attributes separately (ugly solution, but saves performance)
         return {
-            "observed": observed,
-            "next_observed": next_observed,
-            "graphs_tuple": [
-                to_graphs_tuple(self.full_cliques, s, self.K) for s in gfn_state
-            ],
-            "next_graphs_tuple": [
-                to_graphs_tuple(self.full_cliques, s, self.K) for s in next_gfn_state
-            ],
-            "actions": actions,
-            "dones": dones,
-            "var_energies": var_energies,
-            "value_energies": value_energies,
-            "mask": mask,
-            "next_mask": next_mask,
+            "observed": np.stack(observed, axis=0),
+            "next_observed": np.stack(next_observed, axis=0),
+            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),
+            "next_graphs_tuple": to_graphs_tuple(
+                self.full_cliques, next_gfn_state, self.K
+            ),
+            "actions": np.stack(actions, axis=0),
+            "dones": np.stack(dones, axis=0),
+            "var_energies": np.stack(var_energies, axis=0),
+            "value_energies": np.stack(value_energies, axis=0),
+            "mask": np.stack(mask, axis=0),
+            "next_mask": np.stack(next_mask),
         }
 
     def __len__(self):
@@ -188,7 +186,7 @@ class ReplayBuffer:
         )
 
         return {
-            "graph": [Graph(structure=structure_graph, values=value_graph)],
+            "graph": Graph(structure=structure_graph, values=value_graph),
             "value_energy": np.zeros((1, 1), dtype=np.float_),
             "clique_energy": np.zeros((1, 1), dtype=np.float_),
             "mask": np.zeros(

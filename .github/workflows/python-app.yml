@@ -7,7 +7,7 @@ on:
   push:
     branches: [ "cristian/gfn-env-backbone" ]
   pull_request:
-    branches: [ "cristian/gfn-env-backbone" ]
+    branches: [ "develop" ]
 
 permissions:
   contents: read

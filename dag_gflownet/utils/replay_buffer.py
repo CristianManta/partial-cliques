@@ -46,65 +46,78 @@ class ReplayBuffer:
 
         (var_energies, value_energies) = energies
 
-        # num_samples = np.sum(~dones)
-        add_idx = self._index
-        self._index = (self._index + 1) % self.capacity
-        self._is_full |= self._index == self.capacity - 1
-        # self._index = (self._index + num_samples) % self.capacity
-        # indices[~dones] = add_idx
+        bsz = len(observations["gfn_state"])
 
-        data = {
-            "observed": observations["gfn_state"][0],
-            "values": observations["gfn_state"][1],
-            "cashed": observations["gfn_state"][2],
-            "done": np.array([next_observations["is_done"]]),
-            "next_observed": next_observations["gfn_state"][0],
-            "next_values": next_observations["gfn_state"][1],
-            "next_cashed": next_observations["gfn_state"][2],
-            "actions": actions,
-            "var_energies": np.array([var_energies]),
-            "value_energies": np.array([value_energies]),
-            "mask": observations["mask"],
-            "next_mask": next_observations["mask"]
-            # Extra keys for monitoring
-        }
+        for i in range(bsz):
+            # num_samples = np.sum(~dones)
+            add_idx = self._index
+            self._index = (self._index + 1) % self.capacity
+            self._is_full |= self._index == self.capacity - 1
+            # self._index = (self._index + num_samples) % self.capacity
+            # indices[~dones] = add_idx
 
-        for name in data:
-            shape = self._replay.dtype[name].shape
-            self._replay[name][add_idx] = np.asarray(data[name].reshape(-1, *shape))
+            data = {
+                "observed": observations["gfn_state"][i][0],
+                "values": observations["gfn_state"][i][1],
+                "cashed": observations["gfn_state"][i][2],
+                "done": np.array([next_observations["is_done"][i]]),
+                "next_observed": next_observations["gfn_state"][i][0],
+                "next_values": next_observations["gfn_state"][i][1],
+                "next_cashed": next_observations["gfn_state"][i][2],
+                "actions": actions[i],
+                "var_energies": np.array([var_energies[i]]),
+                "value_energies": np.array([value_energies[i]]),
+                "mask": observations["mask"][i],
+                "next_mask": next_observations["mask"][i]
+                # Extra keys for monitoring
+            }
+
+            for name in data:
+                shape = self._replay.dtype[name].shape
+                self._replay[name][add_idx] = np.asarray(data[name].reshape(-1, *shape))
 
     def sample(self, batch_size, rng=default_rng()):
         # TODO
         indices = rng.choice(len(self), size=batch_size, replace=False)
         samples = self._replay[indices]
 
-        observed = samples["observed"]
-        values = samples["values"]
-        cashed = samples["cashed"]
-        gfn_state = (observed, values, cashed)
+        observed = [sample["observed"] for sample in samples]
+        mask = [sample["mask"] for sample in samples]
+        next_mask = [sample["next_mask"] for sample in samples]
+        gfn_state = [
+            (sample["observed"], sample["values"], sample["cashed"])
+            for sample in samples
+        ]
 
-        next_observed = samples["next_observed"]
-        next_values = samples["next_values"]
-        next_cashed = samples["next_cashed"]
-        next_gfn_state = (next_observed, next_values, next_cashed)
+        next_observed = [sample["next_observed"] for sample in samples]
+        actions = [sample["actions"] for sample in samples]
+        dones = [sample["done"] for sample in samples]
+        var_energies = [sample["var_energies"] for sample in samples]
+        value_energies = [sample["value_energies"] for sample in samples]
+        next_gfn_state = [
+            (sample["next_observed"], sample["next_values"], sample["next_cashed"])
+            for sample in samples
+        ]
 
         # Convert structured array into dictionary
         # If we find that the training loop is too slow, we might want to
         # store the graphs tuples using replay.add directly by storing each
         # of its attributes separately (ugly solution, but saves performance)
         return {
-            "observed": samples["observed"],
-            "next_observed": samples["next_observed"],
-            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),
-            "next_graphs_tuple": to_graphs_tuple(
-                self.full_cliques, next_gfn_state, self.K
-            ),
-            "actions": samples["actions"],
-            "done": samples["done"],
-            "var_energies": samples["var_energies"],
-            "value_energies": samples["value_energies"],
-            "mask": samples["mask"],
-            "next_mask": samples["next_mask"],
+            "observed": observed,
+            "next_observed": next_observed,
+            "graphs_tuple": [
+                to_graphs_tuple(self.full_cliques, s, self.K) for s in gfn_state
+            ],
+            "next_graphs_tuple": [
+                to_graphs_tuple(self.full_cliques, s, self.K) for s in next_gfn_state
+            ],
+            "actions": actions,
+            "dones": dones,
+            "var_energies": var_energies,
+            "value_energies": value_energies,
+            "mask": mask,
+            "next_mask": next_mask,
         }
 
     def __len__(self):
@@ -175,7 +188,7 @@ class ReplayBuffer:
         )
 
         return {
-            "graph": Graph(structure=structure_graph, values=value_graph),
+            "graph": [Graph(structure=structure_graph, values=value_graph)],
             "value_energy": np.zeros((1, 1), dtype=np.float_),
             "clique_energy": np.zeros((1, 1), dtype=np.float_),
             "mask": np.zeros(

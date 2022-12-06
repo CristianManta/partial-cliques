@@ -56,10 +56,15 @@ class DAGGFlowNet:
         # Then evaluate the models to obtain its log-probs
 
         # Example:
+        """
         log_probs_clique = self.clique_model.apply(
-            params.clique_model, samples["graphs_tuple"], samples["mask"], x_dim, K
+            params.clique_model,
+            samples["graphs_tuple"],
+            samples["mask"],
+            x_dim,
+            K,
         )
-
+        """
         # OR
         log_probs_values, value_log_flows = self.value_model.apply(
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
@@ -116,9 +121,10 @@ class DAGGFlowNet:
         # Sample actions
         # clique_policy_actions = batch_random_choice(subkey2, jnp.exp(log_probs_clique), masks)
         clique_actions = jax.random.categorical(
-            subkey1, log_probs_clique[0] / 999
+            subkey1, log_probs_clique[:, 0] / 999
         )  # a single integer between 0 and h_dim
 
+        """
         if clique_actions == self.h_dim:
             # we are done!
             logs = {
@@ -127,8 +133,9 @@ class DAGGFlowNet:
 
             actions = np.array([-1, -1])
             return actions, key, logs
-
-        graphs.values.nodes[clique_actions] = self.N + K + 1
+        """
+        for graph in graphs:
+            graph.values.nodes[clique_actions] = self.N + K + 1
 
         # use the value GFN to sample a value for the variable we just observed
         log_probs_value, log_flow = self.value_model.apply(
@@ -137,8 +144,10 @@ class DAGGFlowNet:
 
         sampled_value = jax.random.categorical(subkey1, log_probs_value)
 
-        actions = np.array([clique_actions, sampled_value])
-
+        actions = jnp.stack([clique_actions, sampled_value], axis=-1)
+        actions = jnp.where(
+            clique_actions == self.h_dim, -jnp.ones_like(actions), actions
+        )
         logs = {
             "is_exploration": None,
         }

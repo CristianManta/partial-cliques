@@ -49,15 +49,13 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
     """
 
     assert K == 2
-
-    batch_size, num_variables = masks.shape
+    masks = jnp.stack(masks, axis=0)
+    batch_size = masks.shape[0]
+    num_variables = masks.shape[1]
     h_dim = num_variables - x_dim
     masks = masks[:, :h_dim]
 
-    if (
-        sampling_method == 2
-    ):  # NOTE: This section has not been tested on batch_size != 1
-        assert batch_size == 1
+    if sampling_method == 2:
         masking_value = -1e5
         stop = jnp.full((batch_size, 1), masking_value, dtype=float)
         first_available_node_ix = jnp.where(masks, size=1)[1]
@@ -84,15 +82,22 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
         "edge_embed", shape=(1, 128), init=hk.initializers.TruncatedNormal()
     )
 
-    structural_embeddings = node_embeddings_list(graphs.structure.nodes)
-    value_embeddings = node_embeddings_list(graphs.values.nodes)
+    structural_embeddings = jnp.stack(
+        [node_embeddings_list(graph.structure.nodes) for graph in graphs], axis=0
+    )
+    value_embeddings = jnp.stack(
+        [node_embeddings_list(graph.values.nodes) for graph in graphs], axis=0
+    )
     node_embeddings = structural_embeddings + value_embeddings
 
-    graphs = graphs.structure._replace(
-        nodes=node_embeddings,
-        edges=jnp.repeat(edge_embedding, graphs.structure.edges.shape[0], axis=0),
-        globals=jnp.zeros((graphs.structure.n_node.shape[0], 1)),
-    )
+    graphs = [
+        graph.structure._replace(
+            nodes=node_embeddings[i],
+            edges=jnp.repeat(edge_embedding, graph.structure.edges.shape[0], axis=0),
+            globals=jnp.zeros((graph.structure.n_node.shape[0], 1)),
+        )
+        for i, graph in enumerate(graphs)
+    ]
 
     # Define graph network updates
     @jraph.concatenated_args
@@ -112,10 +117,12 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
         update_node_fn=update_node_fn,
         update_global_fn=update_global_fn,
     )
-    features = graph_net(graphs)
+    features = [graph_net(graph) for graph in graphs]
 
     # node_features = features.nodes[:batch_size * num_variables]
-    global_features = features.globals[:batch_size]
+    global_features = jnp.stack([feature.globals for feature in features], axis=0)[
+        :batch_size, :
+    ]
 
     # Reshape the node features, and project into keys, queries & values
     # node_features = node_features.reshape(batch_size, num_variables, -1)
@@ -175,7 +182,7 @@ def value_policy(graphs, masks, x_dim, K):
     """
 
     assert K == 2
-
+    masks = jnp.stack(masks, axis=0)
     batch_size, num_variables = masks.shape
     h_dim = num_variables - x_dim
     masks = masks[:, :h_dim]
@@ -194,15 +201,22 @@ def value_policy(graphs, masks, x_dim, K):
         "edge_embed", shape=(1, 128), init=hk.initializers.TruncatedNormal()
     )
 
-    structural_embeddings = node_embeddings_list(graphs.structure.nodes)
-    value_embeddings = node_embeddings_list(graphs.values.nodes)
+    structural_embeddings = jnp.stack(
+        [node_embeddings_list(graph.structure.nodes) for graph in graphs], axis=0
+    )
+    value_embeddings = jnp.stack(
+        [node_embeddings_list(graph.values.nodes) for graph in graphs], axis=0
+    )
     node_embeddings = structural_embeddings + value_embeddings
 
-    graphs_tuple = graphs.values._replace(
-        nodes=node_embeddings,
-        edges=jnp.repeat(edge_embedding, graphs.values.edges.shape[0], axis=0),
-        globals=jnp.zeros((graphs.values.n_node.shape[0], 1)),
-    )
+    graphs_tuple = [
+        graph.values._replace(
+            nodes=node_embeddings[i],
+            edges=jnp.repeat(edge_embedding, graph.values.edges.shape[0], axis=0),
+            globals=jnp.zeros((graph.values.n_node.shape[0], 1)),
+        )
+        for i, graph in enumerate(graphs)
+    ]
 
     # Define graph network updates
     @jraph.concatenated_args
@@ -222,10 +236,14 @@ def value_policy(graphs, masks, x_dim, K):
         update_node_fn=update_node_fn,
         update_global_fn=update_global_fn,
     )
-    features = graph_net(graphs_tuple)
+    features = [graph_net(gt) for gt in graphs_tuple]
 
-    node_features = features.nodes[: batch_size * num_variables]
-    global_features = features.globals[:batch_size]
+    node_features = jnp.stack([feature.nodes for feature in features], axis=0)[
+        :, : batch_size * num_variables, :
+    ]
+    global_features = jnp.stack([feature.globals for feature in features], axis=0)[
+        :, :batch_size, :
+    ]
 
     # Project the nodes features into keys, queries & values
     node_features = hk.Linear(128 * 3, name="projection")(node_features)
@@ -240,8 +258,12 @@ def value_policy(graphs, masks, x_dim, K):
         node_features
     )  # Assumption that k = 2 here (last layer)
     # all_logits = jnp.squeeze(all_logits)
-    targets = (
-        graphs.values.nodes[: batch_size * num_variables] == current_sampling_feature
+    targets = jnp.stack(
+        [
+            graph.values.nodes[: batch_size * num_variables] == current_sampling_feature
+            for graph in graphs
+        ],
+        axis=0,
     )  # target nodes to fill values
 
     targets_ix = jnp.nonzero(targets, size=batch_size)

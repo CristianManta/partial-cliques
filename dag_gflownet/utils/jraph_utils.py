@@ -61,6 +61,7 @@ def to_graphs_tuple(
     structure_graphs = []
     value_graphs = []
     for gfn_state in gfn_states:
+        squeezed_states = []
         for i in range(len(gfn_state)):
             squeezed_states.append(np.squeeze(gfn_state[i]))
             assert len(squeezed_states[i].shape) == 1

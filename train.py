@@ -14,7 +14,7 @@ from dag_gflownet.env import GFlowNetDAGEnv
 from dag_gflownet.gflownet import DAGGFlowNet
 from dag_gflownet.utils.replay_buffer import ReplayBuffer
 from dag_gflownet.utils.factories import get_scorer
-from dag_gflownet.utils.data import get_data
+from dag_gflownet.utils.data import get_data, get_potential_fns, get_energy_fns
 from dag_gflownet.utils.gflownet import posterior_estimate
 from dag_gflownet.utils.metrics import (
     expected_shd,
@@ -54,30 +54,45 @@ def main(args):
 
     # Generate the ground truth data
     # TODO:
-    graph, data, _ = get_scorer(args, rng=rng)
-    latent_data, obs_data = data
+    graph, data, _ = get_data("random_latent_graph", args, rng=rng)
+    # latent_data, obs_data = data
+    true_ugm, full_cliques, factors = graph
+    # instead of using sum-product to get the unormalized probabilities, use the factors directly to get the energies
+    clique_potentials = get_potential_fns(true_ugm, full_cliques)
+    # clique_potentials = factors
+    # clique_energies = get_energy_fns(true_ugm, full_cliques)
 
     # Create the environment
     # TODO:
-    env = GFlowNetDAGEnv(num_envs=args.num_envs, num_variables=args.num_variables)
+    env = GFlowNetDAGEnv(
+        num_envs=args.num_envs,
+        h_dim=args.h_dim,
+        x_dim=args.x_dim,
+        clique_potentials=clique_potentials,
+        full_cliques=full_cliques,
+        K=args.K,
+        graph=true_ugm,
+        data=data,
+    )
 
     # Create the replay buffer
-    replay = ReplayBuffer(  # TODO: Modify this so that we store most likely
-        # complete trajectories (since the reward is not
-        # received at every transition)
+    replay = ReplayBuffer(  # TODO: Implement replay buffer
         args.replay_capacity,
-        num_variables=args.num_variables,
+        full_cliques,
+        args.K,
+        num_variables=args.h_dim + args.x_dim,
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(delta=args.delta)  # TODO:
+    gflownet = DAGGFlowNet(delta=args.delta, x_dim=args.x_dim, h_dim=args.h_dim)
     optimizer = optax.adam(args.lr)
     params, state = gflownet.init(
         subkey,
         optimizer,
-        replay.dummy["graph"],  # TODO: will need to change this depending on the
-        # inputs type that we decide to use for the function approximator
+        replay.dummy["graph"],
         replay.dummy["mask"],
+        args.x_dim,
+        args.K,
     )
     exploration_schedule = jax.jit(
         optax.linear_schedule(
@@ -89,42 +104,49 @@ def main(args):
     )
 
     # Training loop
-    indices = None
     observations = env.reset()
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
-            # observations['graph'] = to_graphs_tuple(observations['adjacency'])
-            actions, key, logs = gflownet.act(params, key, observations, epsilon)
-            next_observations, dones = env.step(np.asarray(actions))
-            indices = replay.add(  # TODO: Maybe only need to store an entire
-                # trajectory at the time
+            observations["graphs_tuple"] = to_graphs_tuple(
+                full_cliques, observations["gfn_state"], args.K
+            )
+            actions, key, logs = gflownet.act(
+                params, key, observations, epsilon, args.x_dim, args.K
+            )  # TODO:
+            next_observations, energies, dones = env.step(
+                np.asarray(actions)[np.newaxis, ...]
+            )
+            replay.add(  # TODO:
                 observations,
                 actions,
                 logs["is_exploration"],
                 next_observations,
+                energies,
                 dones,
-                prev_indices=indices,
             )
-            observations = next_observations
+
+            if dones:
+                observations = env.reset()
+            else:
+                observations = next_observations
 
             if iteration >= args.prefill:
                 # Update the parameters of the GFlowNet
                 samples = replay.sample(batch_size=args.batch_size, rng=rng)
-                params, state, logs = gflownet.step(params, state, samples)
+                params, state, logs = gflownet.step(
+                    params, state, samples, args.x_dim, args.K
+                )
 
                 train_steps = iteration - args.prefill
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
                         wandb.log(
-                            {
-                                "replay/num_edges": wandb.Histogram(
-                                    replay.transitions["num_edges"]
-                                ),  # TODO: add more appropriate logs
+                            {                                
                                 "replay/is_exploration": np.mean(
                                     replay.transitions["is_exploration"]
-                                ),
+                                )
                             },
                             commit=False,
                         )
@@ -289,17 +311,6 @@ if __name__ == "__main__":
     graph_args = parser.add_argument_group("Graph")
 
     graph_args.add_argument(
-        "--num_variables",
-        type=int,
-        required=True,
-        help="Maximum number of latent variables that can be sampled",
-    )
-    graph_args.add_argument(
-        "--num_edges", type=int, required=True, help="Average number of edges"
-    )  # TODO: Maybe could replace this with
-    # average size of a clique, or some other regularization term for the
-    # potentials
-    graph_args.add_argument(
         "--num_samples",
         type=int,
         required=True,
@@ -310,6 +321,12 @@ if __name__ == "__main__":
     )
     graph_args.add_argument(
         "--h_dim", type=int, required=True, help="The number of latent variables?"
+    )
+    graph_args.add_argument(
+        "--K",
+        type=int,
+        required=True,
+        help="The number of discrete values that the variables can take?",
     )
 
     args = parser.parse_args()

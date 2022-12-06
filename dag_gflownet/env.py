@@ -7,10 +7,17 @@ from copy import deepcopy
 from gym.spaces import Dict, Box, Discrete
 
 from dag_gflownet.utils.cache import LRUCache
+from dag_gflownet.utils.data import (
+    get_value_policy_energy,
+    get_potential_fns,
+    get_clique_selection_mask,
+)
 
 
 class GFlowNetDAGEnv(gym.vector.VectorEnv):
-    def __init__(self, num_envs, num_variables):
+    def __init__(
+        self, num_envs, h_dim, x_dim, K, graph, full_cliques, clique_potentials, data
+    ):
         """GFlowNet environment for learning a distribution over DAGs.
 
         Parameters
@@ -18,37 +25,103 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         num_envs : int
             Number of parallel environments, or equivalently the number of
             parallel trajectories to sample.
-        num_variables : int
-            Maximum number of latent variables that can be sampled
+        h_dim : int
+            Number of latent variables.
+
+        x_dim: int
+            Number of low-level variables.
+
+        graph: MarkovNetwork
+            The ground truth UGM.
+
+        data: dataframe
+            data sampled from the ground truth UGM.
         """
 
         self._state = None
-        self.num_variables = num_variables
+        self.h_dim = h_dim
+        self.x_dim = x_dim
+        self.K = K
+        self.num_variables = h_dim + x_dim
+        self.graph = graph
+        self.full_cliques = full_cliques
+        self.clique_potentials = clique_potentials
+        self.data = np.array(data)
 
-        shape = (self.num_variables, self.num_variables)
-        # TODO: Change this to contain (name, value) tuples
-        # observation_space = Dict({
-        #     'adjacency': Box(low=0., high=1., shape=shape, dtype=np.int_),
-        #     'mask': Box(low=0., high=1., shape=shape, dtype=np.int_),
-        #     'num_edges': Discrete(max_edges),
-        #     'score': Box(low=-np.inf, high=np.inf, shape=(), dtype=np.float_),
-        #     'order': Box(low=-1, high=max_edges, shape=shape, dtype=np.int_)
-        # })
-        # action_space = Discrete(self.num_variables ** 2 + 1) # TODO: Also need to change this
-        observation_space, action_space = (None, None)
+        # TODO: Change this to the appropriate obs space
+        observation_space = Dict(
+            {
+                "something": Box(low=0.0, high=1.0, shape=(1,), dtype=np.int_),
+            }
+        )
+        action_space = Discrete(self.num_variables * self.K)
         super().__init__(num_envs, observation_space, action_space)
 
     def reset(self):
-        # TODO:
-        # self._state = {
-        #     'adjacency': np.zeros(shape, dtype=np.int_),
-        #     'mask': 1 - self._closure_T,
-        #     'num_edges': np.zeros((self.num_envs,), dtype=np.int_),
-        #     'score': np.zeros((self.num_envs,), dtype=np.float_),
-        #     'order': np.full(shape, -1, dtype=np.int_)
-        # }
-        raise NotImplementedError
+        observed = np.zeros(self.num_variables, dtype=int)
+        observed[self.h_dim :] = 1
+        values = np.array([self.K] * self.num_variables)
+        values[self.h_dim :] = self.data[
+            np.random.randint(self.data.shape[0]),
+            self.h_dim :,
+        ]
+        gfn_state = (
+            observed,
+            values,
+            np.ones(self.num_variables, dtype=int),
+        )
+        # mark x as cashed
+        gfn_state[2][self.h_dim :] = 0
+        self._state = {
+            "gfn_state": gfn_state,
+            "mask": np.ones(shape=(1, self.num_variables), dtype=int),
+            "unobserved_cliques": deepcopy(self.full_cliques),
+            "is_done": False,
+        }
+        # mark x as observed and not eligible for sampling
+        self._state["mask"][0, self.h_dim :] = 0
+        return deepcopy(self._state)
 
     def step(self, actions):
-        # TODO: Update current state given batch of actions
-        raise NotImplementedError
+        # we use the convention that if actions[0][0] == -1, we terminate
+        assert len(actions.shape) == 2
+        assert actions.shape[0] == 1
+        assert actions.shape[1] == 2
+        obs_var = actions[0, 0]
+        obs_value = actions[0, 1]
+        if obs_var == -1:
+            self._state["is_done"] = True
+
+            var_energy = 0.0  # TODO:
+            value_energy = 0  # TODO: calculate partial energy by merging cliques
+
+            return (
+                deepcopy(self._state),
+                (var_energy, value_energy),
+                self._state["is_done"],
+            )
+        is_done = False
+        assert self._state["mask"][0, obs_var] == 1
+        assert self._state["gfn_state"][0][obs_var] == 0
+        self._state["gfn_state"][0][obs_var] = 1
+        self._state["gfn_state"][1][obs_var] = obs_value
+        var_energy = 0.0  # TODO
+
+        new_gfn_state, unobserved_cliques, value_energy = get_value_policy_energy(
+            self._state["gfn_state"],
+            self._state["unobserved_cliques"],
+            self.full_cliques,
+            self.clique_potentials,
+            self.K,
+        )
+
+        self._state["unobserved_cliques"] = unobserved_cliques
+        self._state["gfn_state"] = new_gfn_state
+
+        self._state["mask"] = np.array(
+            get_clique_selection_mask(
+                self._state["gfn_state"], self._state["unobserved_cliques"], self.K
+            )
+        )[np.newaxis, ...]
+
+        return deepcopy(self._state), (var_energy, value_energy), is_done

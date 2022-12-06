@@ -92,6 +92,67 @@ def detailed_balance_loss(
     return (loss, logs)
 
 
+def detailed_balance_loss_free_energy_to_go(
+    log_fetg_t, log_fetg_tp1, log_pf, log_pb, partial_energies, delta=1.0
+):
+    r"""Detailed balance loss using free energy to go.
+
+    This function computes the detailed balance loss, in the specific case
+    where the energy is decomposable and we never terminate.
+
+    In practice, to avoid gradient explosion, we use the Huber loss instead
+    of the L2-loss (the L2-loss can be emulated with a large value of delta).
+    Moreover, we do not backpropagate the error through $P_{\theta}(s_{f} \mid s_{t+1})$,
+    which is computed using a target network.
+
+    Parameters
+    ----------
+    log_fetg_t : jnp.DeviceArray
+        The log free-energy-to-go for state $s_t$. This array
+        has size `(B, 1)`, where `B` is the batch-size.
+
+    log_fetg_tp1 : jnp.DeviceArray
+        The log free-energy-to-go for state $s_{t+1}$ This array
+        has size `(B, 1)`, where `B` is the batch-size.
+
+    log_pf : jnp.DeviceArray
+        log P_{\theta}(s_{t+1} \mid s_{t})
+
+    log_pb : jnp.DeviceArray
+        log P_{\theta}(s_{t} \mid s_{t+1})
+
+    partial_energies : jnp.DeviceArray
+        Partial energies. This array has size `(B, 1)`, where
+        `B` is the batch-size.
+
+    delta : float (default: 1.)
+        The value of delta for the Huber loss.
+
+    Returns
+    -------
+    loss : jnp.DeviceArray
+        The detailed balance loss averaged over a batch of samples.
+
+    logs : dict
+        Additional information for logging purposes.
+    """
+    error = (
+        jnp.squeeze(-partial_energies, axis=-1)
+        + log_pb
+        - log_pf
+        + log_fetg_t
+        - log_fetg_tp1
+    )
+    loss = jnp.mean(optax.huber_loss(error, delta=delta))
+    # if loss > 100:
+    #    breakpoint()
+    logs = {
+        "error": error,
+        "loss": loss,
+    }
+    return (loss, logs)
+
+
 def log_policy_cliques(logits, stop, masks):
     masked_logits = mask_logits(logits, masks)
     can_continue = jnp.any(masks, axis=-1, keepdims=True)

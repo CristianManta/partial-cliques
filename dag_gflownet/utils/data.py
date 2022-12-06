@@ -231,7 +231,7 @@ def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int
     eligible_vars = set().union(*eligible_cliques) - set(active_vars)
 
     mask = np.zeros(N)
-    if len(eligible_vars) == 0:
+    if len(eligible_vars) == 0 or len(active_vars) == 0:
         mask = 1 - gfn_state[0]
     else:
         mask[np.array(list(eligible_vars))] = 1
@@ -296,7 +296,7 @@ def get_value_policy_energy(
     assert np.max(gfn_state[1]) <= K
 
     # we remove fully observed nodes
-    newly_observed_vars = set(np.nonzero(gfn_state[0] & gfn_state[2])[0].flatten())
+    all_observed_vars = set(np.nonzero(gfn_state[0])[0].flatten())
     new_unobserved_cliques = [c for c in unobserved_cliques]
 
     # we cash in every clique we complete and update the GFN state
@@ -304,7 +304,9 @@ def get_value_policy_energy(
     energy = 0.0
 
     for c_ind in range(num_cliques):
-        if newly_observed_vars.issuperset(unobserved_cliques[c_ind]):
+        if len(unobserved_cliques[c_ind]) > 0 and all_observed_vars.issuperset(
+            unobserved_cliques[c_ind]
+        ):
             new_unobserved_cliques[c_ind] = set()
             gfn_state[2][np.array(list(full_cliques[c_ind]))] = 0
             if isinstance(clique_potentials[c_ind], DiscreteFactor):
@@ -319,7 +321,8 @@ def get_value_policy_energy(
                         gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]
                     )
                 )
-
+    if np.all(gfn_state[0] == 1):
+        assert np.all([len(c) == 0 for c in new_unobserved_cliques])
     return gfn_state, new_unobserved_cliques, energy
 
 
@@ -366,7 +369,7 @@ if __name__ == "__main__":
         np.array([0, 0, 0, 1, 1, 1, 0, 0, 0, 0]),
     )
     new_gfn_state, new_unobserved_cliques, energy = get_value_policy_energy(
-        gfn_state, unobserved_cliques, full_cliques, clique_potentials, K
+        gfn_state, new_unobserved_cliques, full_cliques, clique_potentials, K
     )
     assert energy == 0.0
 

@@ -107,11 +107,6 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         self._state["gfn_state"][1][obs_var] = obs_value
         var_energy = 0.0  # TODO
 
-        self._state["mask"] = np.array(
-            get_clique_selection_mask(
-                self._state["gfn_state"], self._state["unobserved_cliques"], self.K
-            )
-        )[np.newaxis, ...]
         new_gfn_state, unobserved_cliques, value_energy = get_value_policy_energy(
             self._state["gfn_state"],
             self._state["unobserved_cliques"],
@@ -119,7 +114,14 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             self.clique_potentials,
             self.K,
         )
+
         self._state["unobserved_cliques"] = unobserved_cliques
         self._state["gfn_state"] = new_gfn_state
+
+        self._state["mask"] = np.array(
+            get_clique_selection_mask(
+                self._state["gfn_state"], self._state["unobserved_cliques"], self.K
+            )
+        )[np.newaxis, ...]
 
         return deepcopy(self._state), (var_energy, value_energy), is_done

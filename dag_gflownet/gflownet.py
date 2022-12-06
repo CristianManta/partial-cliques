@@ -144,7 +144,7 @@ class DAGGFlowNet:
         }
         return (actions, key, logs)
 
-    # @partial(jit, static_argnums=(0, 4, 5))
+    @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

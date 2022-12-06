@@ -143,13 +143,10 @@ def main(args):
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
                         wandb.log(
-                            {
-                                "replay/num_edges": wandb.Histogram(
-                                    replay.transitions["num_edges"]
-                                ),  # TODO: add more appropriate logs
+                            {                                
                                 "replay/is_exploration": np.mean(
                                     replay.transitions["is_exploration"]
-                                ),
+                                )
                             },
                             commit=False,
                         )

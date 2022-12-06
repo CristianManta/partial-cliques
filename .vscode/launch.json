@@ -52,9 +52,10 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "--off_wandb",
                 "--prefill",
-                "30",
+                "100",
+                "--num_iterations",
+                "10000",
                 "--batch_size",
                 "1",
                 "--num_samples",
@@ -66,7 +67,9 @@
                 "--K",
                 "2",
                 "--seed",
-                "24329"
+                "24329",
+                "--log_every",
+                "10"
             ]
         }
     ]

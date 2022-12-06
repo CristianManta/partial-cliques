@@ -125,7 +125,7 @@ def main(args):
                 dones,
             )
 
-            if dones:
+            if dones[0][0]:
                 observations = env.reset()
             else:
                 observations = next_observations

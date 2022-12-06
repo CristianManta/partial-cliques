@@ -66,11 +66,13 @@ class DAGGFlowNet:
         )
         """
         # OR
+        # calculate batch size
+        bsz = samples["observed"].shape[0]
         log_probs_values, value_log_flows = self.value_model.apply(
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        log_pf = log_probs_values[0, samples["actions"][0, 1]]
+        log_pf = log_probs_values[jnp.arange(bsz), samples["actions"][:, 1]]
         log_pb = jnp.where(
             samples["dones"],
             0,
@@ -82,7 +84,7 @@ class DAGGFlowNet:
                     + 1e-8
                 )
             ),
-        )
+        ).squeeze(axis=-1)
         """
         if (
             jnp.any(jnp.isnan(log_pb))
@@ -122,7 +124,7 @@ class DAGGFlowNet:
 
         # First get the clique policy
         log_probs_clique = self.clique_model.apply(
-            params.clique_model, graphs, masks, x_dim, K, 1
+            params.clique_model, graphs, masks, x_dim, K, sampling_method=2
         )
 
         # Get uniform policy

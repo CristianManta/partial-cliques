@@ -113,8 +113,23 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             if obs_var == -1:
                 self._state["is_done"][i] = True
                 var_energies.append(0.0)
-                value_energies.append(0.0)
-                dones.append(True)
+                (
+                    new_gfn_state,
+                    unobserved_cliques,
+                    value_energy,
+                ) = get_value_policy_energy(
+                    self._state["gfn_state"][i],
+                    self._state["unobserved_cliques"][i],
+                    self.full_cliques,
+                    self.clique_potentials,
+                    self.K,
+                    count_partial_cliques=True,
+                    graph=self.graph,
+                )
+                value_energies.append(value_energy)
+                self._state["unobserved_cliques"][i] = unobserved_cliques
+                self._state["gfn_state"][i] = new_gfn_state
+                dones.append([True])
                 continue
             new_gfn_state, unobserved_cliques, value_energy = get_value_policy_energy(
                 self._state["gfn_state"][i],

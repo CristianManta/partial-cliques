@@ -185,6 +185,11 @@ def get_index_rep(nodes, model):
     return set([sorted(all_nodes).index(n) for n in nodes])
 
 
+def get_str_rep(nodes, model):
+    all_nodes = [n for n in model.nodes]
+    return set([sorted(all_nodes)[n] for n in nodes])
+
+
 def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int):
     """
     Given a GFN state and a mutable representation of unfinished cliques,
@@ -244,6 +249,8 @@ def get_value_policy_energy(
     full_cliques: list,
     clique_potentials: list,
     K: int,
+    count_partial_cliques: bool = False,
+    graph: MarkovNetwork = None,
 ):
     """
     Given a GFN state, a mutable representation of unfinished cliques,
@@ -304,23 +311,45 @@ def get_value_policy_energy(
     energy = 0.0
 
     for c_ind in range(num_cliques):
-        if len(unobserved_cliques[c_ind]) > 0 and all_observed_vars.issuperset(
-            unobserved_cliques[c_ind]
-        ):
-            new_unobserved_cliques[c_ind] = set()
-            gfn_state[2][np.array(list(full_cliques[c_ind]))] = 0
-            if isinstance(clique_potentials[c_ind], DiscreteFactor):
+        if len(unobserved_cliques[c_ind]) > 0:
+            if all_observed_vars.issuperset(unobserved_cliques[c_ind]):
+                new_unobserved_cliques[c_ind] = set()
+                gfn_state[2][np.array(list(full_cliques[c_ind]))] = 0
+                if isinstance(clique_potentials[c_ind], DiscreteFactor):
+                    energy -= np.log(
+                        clique_potentials[c_ind].values[
+                            tuple(
+                                gfn_state[1][
+                                    np.array(sorted(list(full_cliques[c_ind])))
+                                ]
+                            )
+                        ]
+                    )
+                else:
+                    energy -= np.log(
+                        clique_potentials[c_ind](
+                            gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]
+                        )
+                    )
+            elif count_partial_cliques:
+                # we also cash out partially observed cliques
+                assert graph is not None
+                partially_observed_vars = list(
+                    full_cliques[c_ind].intersection(all_observed_vars)
+                )
                 energy -= np.log(
-                    clique_potentials[c_ind].values[
-                        tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))])
+                    factor_sum_product(
+                        output_vars=list(get_str_rep(partially_observed_vars, graph)),
+                        factors=[graph.factors[c_ind]],
+                    ).values[
+                        tuple(
+                            gfn_state[1][
+                                np.array(sorted(list(partially_observed_vars)))
+                            ]
+                        )
                     ]
                 )
-            else:
-                energy -= np.log(
-                    clique_potentials[c_ind](
-                        gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]
-                    )
-                )
+
     if np.all(gfn_state[0] == 1):
         assert np.all([len(c) == 0 for c in new_unobserved_cliques])
     return gfn_state, new_unobserved_cliques, energy

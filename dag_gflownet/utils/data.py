@@ -76,7 +76,7 @@ def get_data(name, args, rng=default_rng()):
     return graph, data, score
 
 
-def get_random_graph(d, D, n, rng):
+def get_random_graph(d, D, n, rng=default_rng()):
     latent_nodes = ["h" + str(i) for i in range(d)]
     obs_nodes = ["x" + str(i) for i in range(D)]
     # Random Graph
@@ -304,17 +304,21 @@ def get_value_policy_energy(
     energy = 0.0
 
     for c_ind in range(num_cliques):
-        if unobserved_cliques[c_ind] in newly_observed_vars:
+        if newly_observed_vars.issuperset(unobserved_cliques[c_ind]):
             new_unobserved_cliques[c_ind] = set()
             gfn_state[2][np.array(list(full_cliques[c_ind]))] = 0
             if isinstance(clique_potentials[c_ind], DiscreteFactor):
-                energy -= np.log(clique_potentials[c_ind].values[
-                    (tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]))
-                ])
+                energy -= np.log(
+                    clique_potentials[c_ind].values[
+                        tuple(gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))])
+                    ]
+                )
             else:
-                energy -= np.log(clique_potentials[c_ind](
-                    gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]
-                ))
+                energy -= np.log(
+                    clique_potentials[c_ind](
+                        gfn_state[1][np.array(sorted(list(full_cliques[c_ind])))]
+                    )
+                )
 
     return gfn_state, new_unobserved_cliques, energy
 
@@ -354,7 +358,7 @@ if __name__ == "__main__":
     new_gfn_state, new_unobserved_cliques, energy = get_value_policy_energy(
         gfn_state, unobserved_cliques, full_cliques, clique_potentials, K
     )
-    assert energy == 0.2
+    assert energy == -np.log(0.2)
     assert len(new_unobserved_cliques[0]) == 0
     gfn_state = (
         np.array([1, 1, 1, 0, 1, 0, 1, 1, 1, 1]),

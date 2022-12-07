@@ -73,18 +73,19 @@ class DAGGFlowNet:
         )
 
         log_pf = log_probs_values[jnp.arange(bsz), samples["actions"][:, 1]]
-        log_pb = jnp.where(
-            samples["dones"],
-            0,
-            jnp.log(
-                1
-                / (
-                    samples["next_observed"].sum(axis=-1, keepdims=True) # FIXME: I don't understand how does that relate to the formula from Yoshua's notion
-                    - self.x_dim
-                    + 1e-8
-                )
-            ),
-        ).squeeze(axis=-1)
+        log_pb = jnp.zeros_like(log_pf)
+        # log_pb = jnp.where(
+        #     samples["dones"],
+        #     0,
+        #     jnp.log(
+        #         1
+        #         / (
+        #             samples["next_observed"].sum(axis=-1, keepdims=True) # FIXME: I don't understand how does that relate to the formula from Yoshua's notion
+        #             - self.x_dim
+        #             + 1e-8
+        #         )
+        #     ),
+        # ).squeeze(axis=-1)
         """
         if (
             jnp.any(jnp.isnan(log_pb))

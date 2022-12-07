@@ -82,7 +82,7 @@ def to_graphs_tuple(
         """
         Filtering out duplicate edges, which can happen if two cliques have edges in common. 
         Then sorting in ascending order of senders.
-        """
+        """        
         edges = list(set(edges))
         edges.sort(key=lambda x: x[0])
         senders, receivers = zip(*edges)

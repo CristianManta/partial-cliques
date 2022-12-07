@@ -177,7 +177,7 @@ def value_policy(graphs, masks, x_dim, K):
     current_sampling_feature = num_variables + K + 1
 
     # Embedding of the nodes & edges
-    node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=128)
+    node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=256)
     """
     + 2 because we need to reserve a special embedding for: 
     1) the (target) node with the missing value (to be sampled),     
@@ -186,7 +186,7 @@ def value_policy(graphs, masks, x_dim, K):
     """
 
     edge_embedding = hk.get_parameter(
-        "edge_embed", shape=(1, 128), init=hk.initializers.TruncatedNormal()
+        "edge_embed", shape=(1, 256), init=hk.initializers.TruncatedNormal()
     )
 
     structural_embeddings = node_embeddings_list(graphs.structure.nodes)
@@ -202,15 +202,15 @@ def value_policy(graphs, masks, x_dim, K):
     # Define graph network updates
     @jraph.concatenated_args
     def update_node_fn(features):
-        return hk.nets.MLP([128, 128], name="node")(features)
+        return hk.nets.MLP([256, 256], name="node")(features)
 
     @jraph.concatenated_args
     def update_edge_fn(features):
-        return hk.nets.MLP([128, 128], name="edge")(features)
+        return hk.nets.MLP([256, 256], name="edge")(features)
 
     @jraph.concatenated_args
     def update_global_fn(features):
-        return hk.nets.MLP([128, 128], name="global")(features)
+        return hk.nets.MLP([256, 256], name="global")(features)
 
     graph_net = jraph.GraphNetwork(
         update_edge_fn=update_edge_fn,
@@ -223,7 +223,7 @@ def value_policy(graphs, masks, x_dim, K):
     global_features = features.globals[:batch_size]
 
     # Project the nodes features into keys, queries & values
-    node_features = hk.Linear(128 * 3, name="projection")(node_features)
+    node_features = hk.Linear(256 * 3, name="projection")(node_features)
     queries, keys, values = jnp.split(node_features, 3, axis=1)
 
     # Self-attention layer
@@ -231,7 +231,7 @@ def value_policy(graphs, masks, x_dim, K):
         queries, keys, values
     )
 
-    all_logits = hk.nets.MLP([128, K], name="logit")(
+    all_logits = hk.nets.MLP([256, K], name="logit")(
         node_features
     )  # Assumption that k = 2 here (last layer)
     # all_logits = jnp.squeeze(all_logits)
@@ -242,7 +242,7 @@ def value_policy(graphs, masks, x_dim, K):
     targets_ix = jnp.nonzero(targets, size=batch_size)
     target_logits = all_logits[targets_ix]
 
-    log_flows = hk.nets.MLP([128, 1], name="log_flows")(global_features)
+    log_flows = hk.nets.MLP([256, 1], name="log_flows")(global_features)
     log_flows = jnp.squeeze(log_flows, axis=1)
 
     # Initialize the temperature parameter to 1

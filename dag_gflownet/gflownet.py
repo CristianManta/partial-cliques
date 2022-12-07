@@ -124,7 +124,7 @@ class DAGGFlowNet:
 
         # First get the clique policy
         log_probs_clique = self.clique_model.apply(
-            params.clique_model, graphs, masks, x_dim, K, sampling_method=1
+            params.clique_model, graphs, masks, x_dim, K, sampling_method=2
         )
 
         # Get uniform policy

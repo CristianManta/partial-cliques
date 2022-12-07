@@ -5,7 +5,7 @@ import optax
 import numpy as np
 
 from functools import partial
-from jax import grad, random, jit
+from jax import grad, random, jit, nn
 
 from collections import namedtuple
 
@@ -72,7 +72,7 @@ class DAGGFlowNet:
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        log_pf = log_probs_values[jnp.arange(bsz), samples["actions"][:, 1]]
+        log_pf = nn.log_softmax(log_probs_values[jnp.arange(bsz), samples["actions"][:, 1]])
         log_pb = jnp.zeros_like(log_pf)
         # log_pb = jnp.where(
         #     samples["dones"],

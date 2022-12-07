@@ -248,4 +248,4 @@ def value_policy(graphs, masks, x_dim, K):
     # Initialize the temperature parameter to 1
     temperature = hk.get_parameter("temperature", (), init=hk.initializers.Constant(1))
 
-    return (nn.log_softmax(target_logits / temperature), log_flows)
+    return (target_logits / temperature, log_flows)

@@ -137,7 +137,7 @@ def detailed_balance_loss_free_energy_to_go(
         Additional information for logging purposes.
     """
     error = (
-        jnp.squeeze(-partial_energies, axis=-1)
+        jnp.squeeze(-partial_energies, axis=-1) # FIXME: Perhaps the signs are reversed
         + log_pb
         - log_pf
         + log_fetg_t

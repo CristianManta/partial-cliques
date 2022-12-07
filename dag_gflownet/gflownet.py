@@ -79,7 +79,7 @@ class DAGGFlowNet:
             jnp.log(
                 1
                 / (
-                    samples["next_observed"].sum(axis=-1, keepdims=True)
+                    samples["next_observed"].sum(axis=-1, keepdims=True) # FIXME: I don't understand how does that relate to the formula from Yoshua's notion
                     - self.x_dim
                     + 1e-8
                 )
@@ -103,7 +103,7 @@ class DAGGFlowNet:
         )
         value_energies = samples[
             "value_energies"
-        ]  # TODO: I think that here you mean value_energies
+        ]
 
         return detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,

@@ -9,7 +9,7 @@ Graph = namedtuple("Graph", ["structure", "values"])
 
 
 def to_graphs_tuple(
-    full_cliques: list, gfn_states: list, K: int, pad: bool = False
+    full_cliques: list, gfn_states: list, K: int, x_dim: int, pad: bool = False
 ) -> Graph:
     """Converts a list of tuple representations of the GFN state into a `Graph` object
     compatible with the input type of the clique and value policies.
@@ -45,7 +45,9 @@ def to_graphs_tuple(
         The third iterable is binary and denotes if a variable has
         never been cashed out as a part of a energy term.
     K : int
-        The number of possible values.
+        The number of possible values.        
+    x_dim: int
+        The number of x variables.
     pad : bool, optional
         Whether to pad the resulting graphs in `Graph` with zeroes
         to guarantee a fixed size and prevent re-compilation of the
@@ -69,13 +71,18 @@ def to_graphs_tuple(
         gfn_state = (squeezed_states[0], squeezed_states[1], squeezed_states[2])
 
         num_variables = gfn_state[0].shape[0]
+        h_dim = num_variables - x_dim
         structure_node_features = np.arange(num_variables)
         structure_node_features = np.where(
             gfn_state[0] == 0, num_variables + K, structure_node_features
         )
 
         edges = []
-        for clique in full_cliques:
+        
+        
+        # Adding all the edges in the cliques
+        for i, clique in enumerate(full_cliques):
+            clique = clique.union(set(range(h_dim, num_variables))) # Extending the cliques to contain x
             clique_edges = permutations(clique, r=2)
             edges.extend(clique_edges)
 

@@ -12,11 +12,12 @@ Graph = namedtuple("Graph", ["structure", "values"])
 
 class ReplayBuffer:
     # TODO: Change this class depending on whether we want to store whole transitions in the replay buffer
-    def __init__(self, capacity, full_cliques, K, num_variables):
+    def __init__(self, capacity, full_cliques, K, num_variables, x_dim):
         self.capacity = capacity
         self.num_variables = num_variables
         self.full_cliques = full_cliques
         self.K = K
+        self.x_dim = x_dim
 
         dtype = np.dtype(
             [
@@ -106,9 +107,9 @@ class ReplayBuffer:
         return {
             "observed": np.stack(observed, axis=0),
             "next_observed": np.stack(next_observed, axis=0),
-            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K),
+            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K, self.x_dim),
             "next_graphs_tuple": to_graphs_tuple(
-                self.full_cliques, next_gfn_state, self.K
+                self.full_cliques, next_gfn_state, self.K, self.x_dim
             ),
             "actions": np.stack(actions, axis=0),
             "dones": np.stack(dones, axis=0),

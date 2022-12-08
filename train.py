@@ -81,6 +81,7 @@ def main(args):
         full_cliques,
         args.K,
         num_variables=args.h_dim + args.x_dim,
+        x_dim=args.x_dim
     )
 
     # Create the GFlowNet & initialize parameters
@@ -110,7 +111,7 @@ def main(args):
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
             observations["graphs_tuple"] = to_graphs_tuple(
-                full_cliques, observations["gfn_state"], args.K
+                full_cliques, observations["gfn_state"], args.K, args.x_dim
             )
             actions, key, logs = gflownet.act(
                 params, key, observations, epsilon, args.x_dim, args.K

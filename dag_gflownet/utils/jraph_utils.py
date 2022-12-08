@@ -9,7 +9,7 @@ Graph = namedtuple("Graph", ["structure", "values"])
 
 
 def to_graphs_tuple(
-    full_cliques: list, gfn_states: list, K: int, pad: bool = True
+    full_cliques: list, gfn_states: list, K: int, pad: bool = False
 ) -> Graph:
     """Converts a list of tuple representations of the GFN state into a `Graph` object
     compatible with the input type of the clique and value policies.

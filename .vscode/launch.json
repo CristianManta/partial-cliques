@@ -54,7 +54,7 @@
             "args": [
                 "--off_wandb",
                 "--prefill",
-                "100",
+                "50",
                 "--num_iterations",
                 "2000",
                 "--batch_size",
@@ -68,7 +68,7 @@
                 "--K",
                 "2",
                 "--seed",
-                "24329",
+                "0",
                 "--log_every",
                 "10"
             ]

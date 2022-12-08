@@ -74,7 +74,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         gfn_state[2][self.h_dim :] = 0
         self._state = {
             "gfn_state": [gfn_state],
-            "mask": np.ones(shape=(1, self.num_variables), dtype=int), # FIXME: assumption that batch size = 1
+            "mask": np.ones(shape=(1, self.num_variables), dtype=int),
             "unobserved_cliques": [deepcopy(self.full_cliques)],
             "is_done": [False],
         }
@@ -94,7 +94,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
 
         obs_var = actions[:, 0]
         obs_value = actions[:, 1]
-        bsz = len(self._state["mask"]) # FIXME: See FIXME above
+        bsz = len(self._state["mask"])
 
         assert np.all(
             (self._state["mask"][np.arange(bsz), obs_var] == 1)[actions[:, 0] != -1]

@@ -113,20 +113,35 @@ def to_graphs_tuple(
             n_node=np.array([num_variables]),
             n_edge=np.array([len(edges)]),
         )
-        if pad:
-            # Necessary to avoid changing shapes too often, which triggers jax re-compilation
-            structure_graph = pad_graph_to_nearest_power_of_two(structure_graph)
-            value_graph = pad_graph_to_nearest_power_of_two(value_graph)
 
-            structure_graph.nodes[num_variables:] = (
-                num_variables + K
-            )  # Index signaling dummy embedding
-            value_graph.nodes[num_variables:] = num_variables + K
         structure_graphs.append(structure_graph)
         value_graphs.append(value_graph)
+        
+    structure_graphs = jraph.batch(structure_graphs)
+    value_graphs = jraph.batch(value_graphs)
+    
+
+    if pad: # TODO: I think that we don't need this in our setting anymore, since the edges don't depend on the gfn_state, 
+        # so the size of the GraphsTuple attributes should be constant
+        
+        # Necessary to avoid changing shapes too often, which triggers jax re-compilation
+        structure_graphs = pad_graph_to_nearest_power_of_two(structure_graphs)
+        value_graphs = pad_graph_to_nearest_power_of_two(value_graphs)
+
+        batch_size = len(gfn_states)
+        structure_graphs.nodes[batch_size * num_variables:] = (
+            num_variables + K
+        )  # Index signaling dummy embedding
+        value_graphs.nodes[batch_size * num_variables:] = num_variables + K
+        
+        # This is to convert all numpy arrays to jnp.DeviceArray. It's a quirk of the padding which 
+        # re-converts jnp arrays back to numpy ones. In the future, I think that I'll get rid of padding entirely
+        structure_graphs = jraph.batch([structure_graphs])
+        value_graphs = jraph.batch([value_graphs])
+
 
     return Graph(
-        structure=jraph.batch(structure_graphs), values=jraph.batch(value_graphs)
+        structure=structure_graphs, values=value_graphs
     )
 
 

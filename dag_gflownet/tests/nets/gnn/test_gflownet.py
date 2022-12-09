@@ -29,7 +29,7 @@ def setup():
     full_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
     unobserved_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
 
-    graphs = to_graphs_tuple(full_cliques, gfn_state, K, pad=True)
+    graphs = to_graphs_tuple(full_cliques, [gfn_state], K, x_dim, pad=False)
     mask = jnp.expand_dims(
         jnp.array(get_clique_selection_mask(gfn_state, unobserved_cliques, K)), 0
     )
@@ -73,8 +73,14 @@ def test_clique_policy_shapes_jit(setup):
 
 def test_value_policy_shapes_jit(setup):
     graphs, masks, x_dim, K = setup
-    graphs.values.nodes[1] = masks.shape[1] + K + 1 # Let's say that we want to sample the value for node at index 1
-    graphs.structure.nodes[1] = 1
+    val_graph = graphs.values._replace(
+        nodes = graphs.values.nodes.at[1].set(masks.shape[1] + K + 1) # Let's say that we want to sample the value for node at index 1
+    )
+    structure_graph = graphs.structure._replace(
+        nodes = graphs.structure.nodes.at[1].set(1)
+        
+    )
+    graphs = Graph(structure=structure_graph, values=val_graph)
     seed = 0
     key = random.PRNGKey(seed)
 

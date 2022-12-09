@@ -45,7 +45,7 @@ def to_graphs_tuple(
         The third iterable is binary and denotes if a variable has
         never been cashed out as a part of a energy term.
     K : int
-        The number of possible values.        
+        The number of possible values.
     x_dim: int
         The number of x variables.
     pad : bool, optional
@@ -78,18 +78,19 @@ def to_graphs_tuple(
         )
 
         edges = []
-        
-        
+
         # Adding all the edges in the cliques
         for i, clique in enumerate(full_cliques):
-            clique = clique.union(set(range(h_dim, num_variables))) # Extending the cliques to contain x
+            clique = clique.union(
+                set(range(h_dim, num_variables))
+            )  # Extending the cliques to contain x
             clique_edges = permutations(clique, r=2)
             edges.extend(clique_edges)
 
         """
         Filtering out duplicate edges, which can happen if two cliques have edges in common. 
         Then sorting in ascending order of senders.
-        """        
+        """
         edges = list(set(edges))
         edges.sort(key=lambda x: x[0])
         senders, receivers = zip(*edges)
@@ -123,33 +124,31 @@ def to_graphs_tuple(
 
         structure_graphs.append(structure_graph)
         value_graphs.append(value_graph)
-        
+
     structure_graphs = jraph.batch(structure_graphs)
     value_graphs = jraph.batch(value_graphs)
-    
 
-    if pad: # TODO: I think that we don't need this in our setting anymore, since the edges don't depend on the gfn_state, 
+    if (
+        pad
+    ):  # TODO: I think that we don't need this in our setting anymore, since the edges don't depend on the gfn_state,
         # so the size of the GraphsTuple attributes should be constant
-        
+
         # Necessary to avoid changing shapes too often, which triggers jax re-compilation
         structure_graphs = pad_graph_to_nearest_power_of_two(structure_graphs)
         value_graphs = pad_graph_to_nearest_power_of_two(value_graphs)
 
         batch_size = len(gfn_states)
-        structure_graphs.nodes[batch_size * num_variables:] = (
+        structure_graphs.nodes[batch_size * num_variables :] = (
             num_variables + K
         )  # Index signaling dummy embedding
-        value_graphs.nodes[batch_size * num_variables:] = num_variables + K
-        
-        # This is to convert all numpy arrays to jnp.DeviceArray. It's a quirk of the padding which 
+        value_graphs.nodes[batch_size * num_variables :] = num_variables + K
+
+        # This is to convert all numpy arrays to jnp.DeviceArray. It's a quirk of the padding which
         # re-converts jnp arrays back to numpy ones. In the future, I think that I'll get rid of padding entirely
         structure_graphs = jraph.batch([structure_graphs])
         value_graphs = jraph.batch([value_graphs])
 
-
-    return Graph(
-        structure=structure_graphs, values=value_graphs
-    )
+    return Graph(structure=structure_graphs, values=value_graphs)
 
 
 def _nearest_bigger_power_of_two(x):

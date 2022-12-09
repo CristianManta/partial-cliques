@@ -72,7 +72,9 @@ class DAGGFlowNet:
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        log_pf = nn.log_softmax(log_probs_values[jnp.arange(bsz), samples["actions"][:, 1]])
+        log_pf = nn.log_softmax(
+            log_probs_values[jnp.arange(bsz), samples["actions"][:, 1]]
+        )
         log_pb = jnp.zeros_like(log_pf)
         # log_pb = jnp.where(
         #     samples["dones"],
@@ -102,9 +104,7 @@ class DAGGFlowNet:
             x_dim,
             K,
         )
-        value_energies = samples[
-            "value_energies"
-        ]
+        value_energies = samples["value_energies"]
 
         return detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,

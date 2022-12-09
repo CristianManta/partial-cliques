@@ -74,11 +74,12 @@ def test_clique_policy_shapes_jit(setup):
 def test_value_policy_shapes_jit(setup):
     graphs, masks, x_dim, K = setup
     val_graph = graphs.values._replace(
-        nodes = graphs.values.nodes.at[1].set(masks.shape[1] + K + 1) # Let's say that we want to sample the value for node at index 1
+        nodes=graphs.values.nodes.at[1].set(
+            masks.shape[1] + K + 1
+        )  # Let's say that we want to sample the value for node at index 1
     )
     structure_graph = graphs.structure._replace(
-        nodes = graphs.structure.nodes.at[1].set(1)
-        
+        nodes=graphs.structure.nodes.at[1].set(1)
     )
     graphs = Graph(structure=structure_graph, values=val_graph)
     seed = 0

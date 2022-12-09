@@ -1,10 +1,13 @@
-
 import pytest
 import numpy as np
 
-from dag_gflownet.utils.data import (get_clique_selection_mask, 
-                                     get_value_policy_energy, 
-                                     get_random_graph, get_potential_fns)
+from dag_gflownet.utils.data import (
+    get_clique_selection_mask,
+    get_value_policy_energy,
+    get_random_graph,
+    get_potential_fns,
+)
+
 
 def test_get_clique_selection_mask():
     seed = 0
@@ -25,7 +28,7 @@ def test_get_clique_selection_mask():
     mask = get_clique_selection_mask(gfn_state, unobserved_cliques, K)
     assert np.all(mask == np.array([0, 1, 1, 0, 0, 0, 0, 0, 0, 0])), mask
 
-    
+
 def test_get_value_policy_energy():
     seed = 0
     np.random.seed(seed)

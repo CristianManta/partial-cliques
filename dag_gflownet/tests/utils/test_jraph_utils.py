@@ -68,7 +68,7 @@ def test_to_graphs_tuple_concrete():
     assert len(result.values.nodes) == 17
     assert len(result.structure.edges) == 128
     assert len(result.values.edges) == 128
-    
+
     # Testing with pad=False
     result = to_graphs_tuple(full_cliques, [gfn_state], K, 4, pad=False)
     np.testing.assert_array_equal(result.structure.n_node, np.array([10]))

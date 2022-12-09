@@ -56,7 +56,11 @@ def main(args):
     # TODO:
     graph, data, _ = get_data("random_latent_graph", args, rng=rng)
     # latent_data, obs_data = data
-    true_ugm, full_cliques, factors = graph # FIXME: Not sure if full_cliques should include x or not
+    (
+        true_ugm,
+        full_cliques,
+        factors,
+    ) = graph  # FIXME: Not sure if full_cliques should include x or not
     # instead of using sum-product to get the unormalized probabilities, use the factors directly to get the energies
     clique_potentials = get_potential_fns(true_ugm, full_cliques)
     # clique_potentials = factors
@@ -81,7 +85,7 @@ def main(args):
         full_cliques,
         args.K,
         num_variables=args.h_dim + args.x_dim,
-        x_dim=args.x_dim
+        x_dim=args.x_dim,
     )
 
     # Create the GFlowNet & initialize parameters
@@ -142,7 +146,7 @@ def main(args):
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
                         wandb.log(
-                            {                                
+                            {
                                 "replay/is_exploration": np.mean(
                                     replay.transitions["is_exploration"]
                                 )

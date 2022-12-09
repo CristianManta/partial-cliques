@@ -107,7 +107,9 @@ class ReplayBuffer:
         return {
             "observed": np.stack(observed, axis=0),
             "next_observed": np.stack(next_observed, axis=0),
-            "graphs_tuple": to_graphs_tuple(self.full_cliques, gfn_state, self.K, self.x_dim),
+            "graphs_tuple": to_graphs_tuple(
+                self.full_cliques, gfn_state, self.K, self.x_dim
+            ),
             "next_graphs_tuple": to_graphs_tuple(
                 self.full_cliques, next_gfn_state, self.K, self.x_dim
             ),

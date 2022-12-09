@@ -62,8 +62,8 @@ def main(args):
         factors,
     ) = graph  # FIXME: Not sure if full_cliques should include x or not
     # instead of using sum-product to get the unormalized probabilities, use the factors directly to get the energies
-    clique_potentials = get_potential_fns(true_ugm, full_cliques)
-    # clique_potentials = factors
+    # clique_potentials = get_potential_fns(true_ugm, full_cliques)
+    clique_potentials = factors
     # clique_energies = get_energy_fns(true_ugm, full_cliques)
 
     # Create the environment

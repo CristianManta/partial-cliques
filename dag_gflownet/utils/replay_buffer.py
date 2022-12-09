@@ -29,10 +29,10 @@ class ReplayBuffer:
                 ("done", np.bool_, (1,)),
                 ("value_energies", np.float_, (1,)),
                 ("var_energies", np.float_, (1,)),
-                ("mask", np.uint8, (num_variables,)),
-                ("next_mask", np.uint8, (num_variables,)),
+                ("mask", np.bool, (num_variables,)),
+                ("next_mask", np.bool, (num_variables,)),
                 ("next_observed", np.bool, (num_variables,)),
-                ("next_values", np.bool, (num_variables,)),
+                ("next_values", np.int, (num_variables,)),
                 ("next_cashed", np.bool, (num_variables,)),
             ]
         )

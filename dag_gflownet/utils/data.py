@@ -109,10 +109,8 @@ def get_random_graph(d, D, n, rng=default_rng()):
         for clique in cliques
     ]
 
-    cliques = [
-        get_index_rep(clique, model) - get_index_rep(obs_nodes, model)
-        for clique in cliques
-    ]
+    # we cover all variables in a clique, i.e., both x and h
+    cliques = [get_index_rep(clique, model) for clique in cliques]
 
     model.add_factors(*factors_list)
     gibbs = GibbsSampling(model)

@@ -105,14 +105,22 @@ class DAGGFlowNet:
             K,
         )
         value_energies = samples["value_energies"]
-
-        return detailed_balance_loss_free_energy_to_go(
+        unfiltered_loss, logs = detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,
             log_fetg_tp1=log_fetg_tp1,
             log_pf=log_pf,
             log_pb=log_pb,
             partial_energies=value_energies,
             delta=self.delta,
+            reduction="none",
+        )
+        loss = jnp.where(
+            samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
+        ).sum() / jnp.sum(~samples["dones"])
+        logs["loss"] = loss
+        return (
+            loss,
+            logs,
         )
 
     # @partial(jit, static_argnums=(0, 5, 6))

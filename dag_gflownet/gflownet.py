@@ -5,7 +5,7 @@ import optax
 import numpy as np
 
 from functools import partial
-from jax import grad, random, jit
+from jax import grad, random, jit, nn
 
 from collections import namedtuple
 
@@ -16,6 +16,7 @@ from dag_gflownet.utils.gflownet import (
 )
 from dag_gflownet.utils.jnp_utils import batch_random_choice
 from dag_gflownet.utils.data import get_value_policy_energy
+from dag_gflownet.utils.jraph_utils import Graph
 
 GFlowNetParameters = namedtuple("GFlowNetParameters", ["clique_model", "value_model"])
 
@@ -56,21 +57,44 @@ class DAGGFlowNet:
         # Then evaluate the models to obtain its log-probs
 
         # Example:
+        """
         log_probs_clique = self.clique_model.apply(
-            params.clique_model, samples["graphs_tuple"], samples["mask"], x_dim, K
+            params.clique_model,
+            samples["graphs_tuple"],
+            samples["mask"],
+            x_dim,
+            K,
         )
-
+        """
         # OR
-        log_probs_values, value_log_flows = self.value_model.apply(
+        # calculate batch size
+        bsz = samples["observed"].shape[0]
+        logits_value, value_log_flows = self.value_model.apply(
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        log_pf = log_probs_values[0, samples["actions"][0, 1]]
-        log_pb = jnp.where(
-            samples["done"],
-            0,
-            jnp.log(1 / (samples["next_observed"].sum(axis=-1) - self.x_dim)),
-        )
+        log_pf = nn.log_softmax(logits_value[jnp.arange(bsz), samples["actions"][:, 1]])
+        log_pb = jnp.zeros_like(log_pf)
+        # log_pb = jnp.where(
+        #     samples["dones"],
+        #     0,
+        #     jnp.log(
+        #         1
+        #         / (
+        #             samples["next_observed"].sum(axis=-1, keepdims=True) # FIXME: I don't understand how does that relate to the formula from Yoshua's notion
+        #             - self.x_dim
+        #             + 1e-8
+        #         )
+        #     ),
+        # ).squeeze(axis=-1)
+        """
+        if (
+            jnp.any(jnp.isnan(log_pb))
+            or jnp.any(jnp.isinf(log_pb))
+            or jnp.any(log_pb > 10000)
+        ):
+            raise NotImplementedError
+        """
         log_fetg_t = value_log_flows
         _, log_fetg_tp1 = self.value_model.apply(
             params.value_model,
@@ -79,17 +103,23 @@ class DAGGFlowNet:
             x_dim,
             K,
         )
-        value_energies = samples[
-            "value_energies"
-        ]  # TODO: I think that here you mean value_energies
-
-        return detailed_balance_loss_free_energy_to_go(
+        value_energies = samples["value_energies"]
+        unfiltered_loss, logs = detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,
             log_fetg_tp1=log_fetg_tp1,
             log_pf=log_pf,
             log_pb=log_pb,
             partial_energies=value_energies,
             delta=self.delta,
+            reduction="none",
+        )
+        loss = jnp.where(
+            samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
+        ).sum() / jnp.sum(~samples["dones"])
+        logs["loss"] = loss
+        return (
+            loss,
+            logs,
         )
 
     # @partial(jit, static_argnums=(0, 5, 6))
@@ -102,7 +132,7 @@ class DAGGFlowNet:
 
         # First get the clique policy
         log_probs_clique = self.clique_model.apply(
-            params.clique_model, graphs, masks, x_dim, K, 1
+            params.clique_model, graphs, masks, x_dim, K, sampling_method=2
         )
 
         # Get uniform policy
@@ -116,9 +146,10 @@ class DAGGFlowNet:
         # Sample actions
         # clique_policy_actions = batch_random_choice(subkey2, jnp.exp(log_probs_clique), masks)
         clique_actions = jax.random.categorical(
-            subkey1, log_probs_clique[0] / 999
+            subkey1, log_probs_clique / 999
         )  # a single integer between 0 and h_dim
 
+        """
         if clique_actions == self.h_dim:
             # we are done!
             logs = {
@@ -127,24 +158,33 @@ class DAGGFlowNet:
 
             actions = np.array([-1, -1])
             return actions, key, logs
-
-        graphs.values.nodes[clique_actions] = self.N + K + 1
+        """
+        for i in range(batch_size):
+            new_nodes = graphs.values.nodes.at[i * batch_size + clique_actions[i]].set(
+                self.N + K + 1
+            )
+            graphs = Graph(
+                structure=graphs.structure,
+                values=graphs.values._replace(nodes=new_nodes),
+            )
 
         # use the value GFN to sample a value for the variable we just observed
-        log_probs_value, log_flow = self.value_model.apply(
+        logits_value, log_flow = self.value_model.apply(
             params.value_model, graphs, masks, x_dim, K
         )
 
-        sampled_value = jax.random.categorical(subkey1, log_probs_value)
+        sampled_value = jax.random.categorical(subkey1, logits_value)
 
-        actions = np.array([clique_actions, sampled_value])
-
+        actions = jnp.stack([clique_actions, sampled_value], axis=-1)
+        actions = jnp.where(
+            clique_actions == self.h_dim, -jnp.ones_like(actions), actions
+        )
         logs = {
             "is_exploration": None,
         }
         return (actions, key, logs)
 
-    @partial(jit, static_argnums=(0, 4, 5))
+    # @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

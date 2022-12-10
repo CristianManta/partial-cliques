@@ -56,10 +56,14 @@ def main(args):
     # TODO:
     graph, data, _ = get_data("random_latent_graph", args, rng=rng)
     # latent_data, obs_data = data
-    true_ugm, full_cliques, factors = graph
+    (
+        true_ugm,
+        full_cliques,
+        factors,
+    ) = graph
     # instead of using sum-product to get the unormalized probabilities, use the factors directly to get the energies
-    clique_potentials = get_potential_fns(true_ugm, full_cliques)
-    # clique_potentials = factors
+    # clique_potentials = get_potential_fns(true_ugm, full_cliques)
+    clique_potentials = factors
     # clique_energies = get_energy_fns(true_ugm, full_cliques)
 
     # Create the environment
@@ -81,6 +85,7 @@ def main(args):
         full_cliques,
         args.K,
         num_variables=args.h_dim + args.x_dim,
+        x_dim=args.x_dim,
     )
 
     # Create the GFlowNet & initialize parameters
@@ -110,14 +115,12 @@ def main(args):
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
             observations["graphs_tuple"] = to_graphs_tuple(
-                full_cliques, observations["gfn_state"], args.K
+                full_cliques, observations["gfn_state"], args.K, args.x_dim
             )
             actions, key, logs = gflownet.act(
                 params, key, observations, epsilon, args.x_dim, args.K
             )  # TODO:
-            next_observations, energies, dones = env.step(
-                np.asarray(actions)[np.newaxis, ...]
-            )
+            next_observations, energies, dones = env.step(actions)
             replay.add(  # TODO:
                 observations,
                 actions,
@@ -127,7 +130,7 @@ def main(args):
                 dones,
             )
 
-            if dones:
+            if dones[0][0]:
                 observations = env.reset()
             else:
                 observations = next_observations
@@ -143,7 +146,7 @@ def main(args):
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
                         wandb.log(
-                            {                                
+                            {
                                 "replay/is_exploration": np.mean(
                                     replay.transitions["is_exploration"]
                                 )

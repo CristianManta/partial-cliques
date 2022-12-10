@@ -62,7 +62,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         observed[self.h_dim :] = 1
         values = np.array([self.K] * self.num_variables)
         values[self.h_dim :] = self.data[
-            np.random.randint(self.data.shape[0]),
+            np.random.randint(self.data.shape[0]), # FIXME: Replace with rng
             self.h_dim :,
         ]
         gfn_state = (
@@ -73,10 +73,10 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         # mark x as cashed
         gfn_state[2][self.h_dim :] = 0
         self._state = {
-            "gfn_state": gfn_state,
+            "gfn_state": [gfn_state],
             "mask": np.ones(shape=(1, self.num_variables), dtype=int),
-            "unobserved_cliques": deepcopy(self.full_cliques),
-            "is_done": False,
+            "unobserved_cliques": [deepcopy(self.full_cliques)],
+            "is_done": [False],
         }
         # mark x as observed and not eligible for sampling
         self._state["mask"][0, self.h_dim :] = 0
@@ -87,41 +87,70 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         assert len(actions.shape) == 2
         assert actions.shape[0] == 1
         assert actions.shape[1] == 2
-        obs_var = actions[0, 0]
-        obs_value = actions[0, 1]
-        if obs_var == -1:
-            self._state["is_done"] = True
 
-            var_energy = 0.0  # TODO:
-            value_energy = 0  # TODO: calculate partial energy by merging cliques
+        var_energies = []
+        value_energies = []
+        dones = []
 
-            return (
-                deepcopy(self._state),
-                (var_energy, value_energy),
-                self._state["is_done"],
+        obs_var = actions[:, 0]
+        obs_value = actions[:, 1]
+        bsz = len(self._state["mask"])
+
+        assert np.all(
+            (self._state["mask"][np.arange(bsz), obs_var] == 1)[actions[:, 0] != -1]
+        )
+        for i in range(bsz):
+            assert np.all(
+                (self._state["gfn_state"][i][0][obs_var] == 0)[actions[i, 0] != -1]
             )
-        is_done = False
-        assert self._state["mask"][0, obs_var] == 1
-        assert self._state["gfn_state"][0][obs_var] == 0
-        self._state["gfn_state"][0][obs_var] = 1
-        self._state["gfn_state"][1][obs_var] = obs_value
+            if actions[i, 0] == -1:
+                continue
+            self._state["gfn_state"][i][0][obs_var] = 1
+            self._state["gfn_state"][i][1][obs_var] = obs_value
         var_energy = 0.0  # TODO
 
-        new_gfn_state, unobserved_cliques, value_energy = get_value_policy_energy(
-            self._state["gfn_state"],
-            self._state["unobserved_cliques"],
-            self.full_cliques,
-            self.clique_potentials,
-            self.K,
-        )
-
-        self._state["unobserved_cliques"] = unobserved_cliques
-        self._state["gfn_state"] = new_gfn_state
-
-        self._state["mask"] = np.array(
-            get_clique_selection_mask(
-                self._state["gfn_state"], self._state["unobserved_cliques"], self.K
+        for i in range(bsz):
+            if obs_var == -1:
+                self._state["is_done"][i] = True
+                var_energies.append(0.0)
+                (
+                    new_gfn_state,
+                    unobserved_cliques,
+                    value_energy,
+                ) = get_value_policy_energy(
+                    self._state["gfn_state"][i],
+                    self._state["unobserved_cliques"][i],
+                    self.full_cliques,
+                    self.clique_potentials,
+                    self.K,
+                    count_partial_cliques=True,
+                    graph=self.graph,
+                )
+                value_energies.append(value_energy)
+                self._state["unobserved_cliques"][i] = unobserved_cliques
+                self._state["gfn_state"][i] = new_gfn_state
+                dones.append([True])
+                continue
+            new_gfn_state, unobserved_cliques, value_energy = get_value_policy_energy(
+                self._state["gfn_state"][i],
+                self._state["unobserved_cliques"][i],
+                self.full_cliques,
+                self.clique_potentials,
+                self.K,
             )
-        )[np.newaxis, ...]
 
-        return deepcopy(self._state), (var_energy, value_energy), is_done
+            self._state["unobserved_cliques"][i] = unobserved_cliques
+            self._state["gfn_state"][i] = new_gfn_state
+
+            self._state["mask"][i] = np.array( # FIXME: I think that there is a bug here when only the last h node is available for sampling
+                get_clique_selection_mask(
+                    self._state["gfn_state"][i],
+                    self._state["unobserved_cliques"][i],
+                    self.K,
+                )
+            )
+            var_energies.append(var_energy)
+            value_energies.append(value_energy)
+            dones.append([False])
+
+        return deepcopy(self._state), (var_energies, value_energies), dones

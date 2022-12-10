@@ -93,7 +93,13 @@ def detailed_balance_loss(
 
 
 def detailed_balance_loss_free_energy_to_go(
-    log_fetg_t, log_fetg_tp1, log_pf, log_pb, partial_energies, delta=1.0
+    log_fetg_t,
+    log_fetg_tp1,
+    log_pf,
+    log_pb,
+    partial_energies,
+    delta=1.0,
+    reduction="mean",
 ):
     r"""Detailed balance loss using free energy to go.
 
@@ -137,13 +143,16 @@ def detailed_balance_loss_free_energy_to_go(
         Additional information for logging purposes.
     """
     error = (
-        jnp.squeeze(-partial_energies, axis=-1)
+        jnp.squeeze(-partial_energies, axis=-1)  # FIXME: Perhaps the signs are reversed
         + log_pb
         - log_pf
         + log_fetg_t
         - log_fetg_tp1
     )
-    loss = jnp.mean(optax.huber_loss(error, delta=delta))
+    if reduction == "mean":
+        loss = jnp.mean(optax.huber_loss(error, delta=delta))
+    else:
+        loss = optax.huber_loss(error, delta=delta)
     # if loss > 100:
     #    breakpoint()
     logs = {

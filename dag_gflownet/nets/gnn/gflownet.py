@@ -39,8 +39,6 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
         the mask for sampling, ignoring the learned policy.
         3: "uniform": Choose the node to sample according to an uniform distribution
         among the eligible nodes (according to the mask), ignoring the learned policy.
-
-
     Returns
     -------
     log_policy_cliques: jnp.DeviceArray of shape (batch_size, num_actions) =
@@ -163,13 +161,11 @@ def value_policy(graphs, masks, x_dim, K):
         Number of low-level variables.
     K: int
         Number of different discrete values that the nodes can take.
-
-
     Returns
     -------
-    log_policy_values: jnp.DeviceArray of shape (batch_size,)
-        Log probabilities of the sampled value being 1.
-
+    logits_values: jnp.DeviceArray of shape (batch_size,)
+        Unnormalized log probabilities for the categorical distribution over the 
+        K choices of the value for the target node to be sampled
     log_flows: jnp.DeviceArray of shape (batch_size,)
         Estimated log flow passing through the current state.
     """

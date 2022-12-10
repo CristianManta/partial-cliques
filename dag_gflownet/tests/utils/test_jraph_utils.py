@@ -37,7 +37,8 @@ def test_to_graphs_tuple_concrete():
     )
     full_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
 
-    result = to_graphs_tuple(full_cliques, gfn_state, K, pad=True)
+    # Testing with pad=True
+    result = to_graphs_tuple(full_cliques, [gfn_state], K, 4, pad=True)
 
     """
     The original graph above has 10 nodes and 36 undirected edges. We convert this 
@@ -67,3 +68,14 @@ def test_to_graphs_tuple_concrete():
     assert len(result.values.nodes) == 17
     assert len(result.structure.edges) == 128
     assert len(result.values.edges) == 128
+
+    # Testing with pad=False
+    result = to_graphs_tuple(full_cliques, [gfn_state], K, 4, pad=False)
+    np.testing.assert_array_equal(result.structure.n_node, np.array([10]))
+    np.testing.assert_array_equal(result.values.n_node, np.array([10]))
+    np.testing.assert_array_equal(result.structure.n_edge, np.array([72]))
+    np.testing.assert_array_equal(result.values.n_edge, np.array([72]))
+    assert len(result.structure.nodes) == 10
+    assert len(result.values.nodes) == 10
+    assert len(result.structure.edges) == 72
+    assert len(result.values.edges) == 72

@@ -60,7 +60,7 @@
                 "--batch_size",
                 "32",
                 "--num_samples",
-                "1",
+                "50",
                 "--x_dim",
                 "4",
                 "--h_dim",

@@ -163,8 +163,9 @@ def value_policy(graphs, masks, x_dim, K):
         Number of different discrete values that the nodes can take.
     Returns
     -------
-    log_policy_values: jnp.DeviceArray of shape (batch_size,)
-        Log probabilities of the sampled value being 1.
+    logits_values: jnp.DeviceArray of shape (batch_size,)
+        Unnormalized log probabilities for the categorical distribution over the 
+        K choices of the value for the target node to be sampled
     log_flows: jnp.DeviceArray of shape (batch_size,)
         Estimated log flow passing through the current state.
     """

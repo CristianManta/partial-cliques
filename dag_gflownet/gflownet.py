@@ -16,6 +16,7 @@ from dag_gflownet.utils.gflownet import (
 )
 from dag_gflownet.utils.jnp_utils import batch_random_choice
 from dag_gflownet.utils.data import get_value_policy_energy
+from dag_gflownet.utils.jraph_utils import Graph
 
 GFlowNetParameters = namedtuple("GFlowNetParameters", ["clique_model", "value_model"])
 
@@ -68,13 +69,11 @@ class DAGGFlowNet:
         # OR
         # calculate batch size
         bsz = samples["observed"].shape[0]
-        log_probs_values, value_log_flows = self.value_model.apply(
+        logits_value, value_log_flows = self.value_model.apply(
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        log_pf = nn.log_softmax(
-            log_probs_values[jnp.arange(bsz), samples["actions"][:, 1]]
-        )
+        log_pf = nn.log_softmax(logits_value[jnp.arange(bsz), samples["actions"][:, 1]])
         log_pb = jnp.zeros_like(log_pf)
         # log_pb = jnp.where(
         #     samples["dones"],
@@ -164,14 +163,17 @@ class DAGGFlowNet:
             new_nodes = graphs.values.nodes.at[i * batch_size + clique_actions[i]].set(
                 self.N + K + 1
             )
-            graphs.values._replace(nodes=new_nodes)
+            graphs = Graph(
+                structure=graphs.structure,
+                values=graphs.values._replace(nodes=new_nodes),
+            )
 
         # use the value GFN to sample a value for the variable we just observed
-        log_probs_value, log_flow = self.value_model.apply(
+        logits_value, log_flow = self.value_model.apply(
             params.value_model, graphs, masks, x_dim, K
         )
 
-        sampled_value = jax.random.categorical(subkey1, log_probs_value)
+        sampled_value = jax.random.categorical(subkey1, logits_value)
 
         actions = jnp.stack([clique_actions, sampled_value], axis=-1)
         actions = jnp.where(
@@ -182,7 +184,7 @@ class DAGGFlowNet:
         }
         return (actions, key, logs)
 
-    @partial(jit, static_argnums=(0, 4, 5))
+    # @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

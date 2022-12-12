@@ -103,6 +103,11 @@ class DAGGFlowNet:
             x_dim,
             K,
         )
+        # mask log_pf and log_fetg_tp1 when dones is True
+        log_fetg_tp1 = jnp.where(
+            samples["dones"].squeeze(axis=-1), 0, log_fetg_tp1
+        )
+        log_pf = jnp.where(samples["dones"].squeeze(axis=-1), 0, log_pf)
         value_energies = samples["value_energies"]
         unfiltered_loss, logs = detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,
@@ -113,9 +118,10 @@ class DAGGFlowNet:
             delta=self.delta,
             reduction="none",
         )
-        loss = jnp.where(
-            samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
-        ).sum() / jnp.sum(~samples["dones"])
+        #loss = jnp.where(
+        #    samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
+        #).sum() / jnp.sum(~samples["dones"])
+        loss = unfiltered_loss.mean()
         logs["loss"] = loss
         return (
             loss,

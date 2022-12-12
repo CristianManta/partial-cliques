@@ -164,7 +164,7 @@ def value_policy(graphs, masks, x_dim, K):
     Returns
     -------
     logits_values: jnp.DeviceArray of shape (batch_size,)
-        Unnormalized log probabilities for the categorical distribution over the 
+        Unnormalized log probabilities for the categorical distribution over the
         K choices of the value for the target node to be sampled
     log_flows: jnp.DeviceArray of shape (batch_size,)
         Estimated log flow passing through the current state.
@@ -190,12 +190,33 @@ def value_policy(graphs, masks, x_dim, K):
         "edge_embed", shape=(1, 128), init=hk.initializers.TruncatedNormal()
     )
 
+    # Preparing a separate copy of the embeddings for the flow estimator
+    # Setting the target node feature to be the same as the unobserved ones
+    flow_estimator_values_nodes = jnp.where(
+        graphs.values.nodes == current_sampling_feature,
+        num_variables + K,
+        graphs.values.nodes,
+    )
+    flow_estimator_value_embeddings = node_embeddings_list(flow_estimator_values_nodes)
+
+    # Embeddings for the policy head
     structural_embeddings = node_embeddings_list(graphs.structure.nodes)
     value_embeddings = node_embeddings_list(graphs.values.nodes)
     node_embeddings = structural_embeddings + value_embeddings
 
+    # embeddings for the flow estimator
+    flow_estimator_node_embeddings = (
+        structural_embeddings + flow_estimator_value_embeddings
+    )
+
     graphs_tuple = graphs.values._replace(
         nodes=node_embeddings,
+        edges=jnp.repeat(edge_embedding, graphs.values.edges.shape[0], axis=0),
+        globals=jnp.zeros((graphs.values.n_node.shape[0], 1)),
+    )
+
+    graphs_tuple_flow_estimator = graphs.values._replace(
+        nodes=flow_estimator_node_embeddings,
         edges=jnp.repeat(edge_embedding, graphs.values.edges.shape[0], axis=0),
         globals=jnp.zeros((graphs.values.n_node.shape[0], 1)),
     )
@@ -219,9 +240,12 @@ def value_policy(graphs, masks, x_dim, K):
         update_global_fn=update_global_fn,
     )
     features = graph_net(graphs_tuple)
+    features_flow_estimator = graph_net(graphs_tuple_flow_estimator)
 
     node_features = features.nodes[: batch_size * num_variables]
-    global_features = features.globals[:batch_size]
+    global_features = features_flow_estimator.globals[
+        :batch_size
+    ]  # We don't want the flow estimator to know about the node targeted for sampling its value
 
     # Project the nodes features into keys, queries & values
     node_features = hk.Linear(128 * 3, name="projection")(node_features)

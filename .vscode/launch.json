@@ -53,6 +53,8 @@
             "justMyCode": true,
             "args": [
                 "--off_wandb",
+                "--num_eval_samples",
+                "10",
                 "--prefill",
                 "50",
                 "--num_iterations",

@@ -66,7 +66,7 @@ def get_data(name, args, rng=default_rng()):
 
     elif name == "random_latent_graph":
         graph, (cliques, factors), data = get_random_graph(
-            d=args.h_dim, D=args.x_dim, n=args.num_samples, rng=rng
+            d=args.h_dim, D=args.x_dim, n=args.num_samples, m=args.num_eval_samples, rng=rng
         )
         graph = (graph, cliques, factors)
         score = None
@@ -76,7 +76,7 @@ def get_data(name, args, rng=default_rng()):
     return graph, data, score
 
 
-def get_random_graph(d, D, n, rng=default_rng()):
+def get_random_graph(d, D, n, m, rng=default_rng()):
     latent_nodes = ["h" + str(i) for i in range(d)]
     obs_nodes = ["x" + str(i) for i in range(D)]
     # Random Graph
@@ -114,9 +114,10 @@ def get_random_graph(d, D, n, rng=default_rng()):
 
     model.add_factors(*factors_list)
     gibbs = GibbsSampling(model)
-    data = gibbs.sample(size=n)
+    train_data = gibbs.sample(size=n)
+    eval_data = gibbs.sample(size=m)
 
-    return model, (cliques, factors_list), data
+    return model, (cliques, factors_list), (train_data, eval_data)
 
 
 def get_potential_fns(model: MarkovNetwork, unobserved_cliques: list):

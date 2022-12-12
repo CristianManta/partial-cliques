@@ -183,6 +183,18 @@ class DAGGFlowNet:
             "is_exploration": None,
         }
         return (actions, key, logs)
+    
+    def compute_data_log_likelihood(self, params, init_observation, x_dim, K, true_partition_fn):
+        graphs = init_observation["graphs_tuple"]        
+        masks = init_observation["mask"].astype(jnp.float32)
+        _, log_flow = self.value_model.apply(
+            params.value_model, graphs, masks, x_dim, K
+        )
+        
+        log_true_partition_fn = jnp.log(true_partition_fn)
+        log_p_hat = log_flow - log_true_partition_fn
+        return log_p_hat        
+        
 
     # @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):

@@ -160,7 +160,7 @@ class DAGGFlowNet:
             return actions, key, logs
         """
         for i in range(batch_size):
-            new_nodes = graphs.values.nodes.at[i * batch_size + clique_actions[i]].set(
+            new_nodes = graphs.values.nodes.at[i * self.N + clique_actions[i]].set(
                 self.N + K + 1
             )
             graphs = Graph(

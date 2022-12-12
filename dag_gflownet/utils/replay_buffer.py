@@ -100,6 +100,22 @@ class ReplayBuffer:
             for sample in samples
         ]
 
+        graphs_tuple = to_graphs_tuple(self.full_cliques, gfn_state, self.K, self.x_dim)
+        next_graphs_tuple = to_graphs_tuple(
+            self.full_cliques, next_gfn_state, self.K, self.x_dim
+        )
+
+        # Flagging the selected node for each action of the clique policy
+        for i in range(batch_size):
+            if actions[i][0] != -1:
+                new_nodes = graphs_tuple.values.nodes.at[
+                    i * self.num_variables + actions[i][0]
+                ].set(self.num_variables + self.K + 1)
+                graphs_tuple = Graph(
+                    structure=graphs_tuple.structure,
+                    values=graphs_tuple.values._replace(nodes=new_nodes),
+                )
+
         # Convert structured array into dictionary
         # If we find that the training loop is too slow, we might want to
         # store the graphs tuples using replay.add directly by storing each
@@ -107,12 +123,8 @@ class ReplayBuffer:
         return {
             "observed": np.stack(observed, axis=0),
             "next_observed": np.stack(next_observed, axis=0),
-            "graphs_tuple": to_graphs_tuple(
-                self.full_cliques, gfn_state, self.K, self.x_dim
-            ),
-            "next_graphs_tuple": to_graphs_tuple(
-                self.full_cliques, next_gfn_state, self.K, self.x_dim
-            ),
+            "graphs_tuple": graphs_tuple,
+            "next_graphs_tuple": next_graphs_tuple,
             "actions": np.stack(actions, axis=0),
             "dones": np.stack(dones, axis=0),
             "var_energies": np.stack(var_energies, axis=0),

@@ -9,6 +9,7 @@ import os
 
 from tqdm import trange
 from numpy.random import default_rng
+from pgmpy.factors import factor_sum_product
 
 from dag_gflownet.env import GFlowNetDAGEnv
 from dag_gflownet.gflownet import DAGGFlowNet
@@ -53,14 +54,23 @@ def main(args):
     key, subkey = jax.random.split(key)
 
     # Generate the ground truth data
-    # TODO:
     graph, data, _ = get_data("random_latent_graph", args, rng=rng)
+    train_data, eval_data = data
     # latent_data, obs_data = data
     (
         true_ugm,
         full_cliques,
         factors,
     ) = graph
+    true_partition_fn = true_ugm.get_partition_function()
+    obs_nodes = ["x" + str(i) for i in range(args.x_dim)]
+    x_factors_values = factor_sum_product(
+        output_vars=obs_nodes, factors=true_ugm.factors
+    ).values
+    # x_factors_values[np.array(eval_data[obs_nodes])[:,0], np.array(eval_data[obs_nodes])[:,1]]
+    indexing = [np.array(eval_data[obs_nodes])[:, i] for i in range(args.x_dim)]
+    eval_unnormalized_probs = x_factors_values[tuple(indexing)]
+    log_p_x_eval = np.log(eval_unnormalized_probs) - np.log(true_partition_fn)
     # instead of using sum-product to get the unormalized probabilities, use the factors directly to get the energies
     # clique_potentials = get_potential_fns(true_ugm, full_cliques)
     clique_potentials = factors
@@ -76,7 +86,18 @@ def main(args):
         full_cliques=full_cliques,
         K=args.K,
         graph=true_ugm,
-        data=data,
+        data=train_data,
+    )
+
+    eval_env = GFlowNetDAGEnv(
+        num_envs=args.num_envs,
+        h_dim=args.h_dim,
+        x_dim=args.x_dim,
+        clique_potentials=clique_potentials,
+        full_cliques=full_cliques,
+        K=args.K,
+        graph=true_ugm,
+        data=eval_data,
     )
 
     # Create the replay buffer
@@ -109,7 +130,12 @@ def main(args):
     )
 
     # Training loop
-    observations = env.reset()
+    observations = env.reset()  # For the training code (this will get updated)
+    init_eval_observation = eval_env.reset()  # For the evaluation code
+    init_eval_observation["graphs_tuple"] = to_graphs_tuple(
+        full_cliques, init_eval_observation["gfn_state"], args.K, args.x_dim
+    )
+
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
@@ -142,6 +168,11 @@ def main(args):
                     params, state, samples, args.x_dim, args.K
                 )
 
+                # Evaluation: compute log p(x_eval)
+                log_p_hat_x_eval = gflownet.compute_data_log_likelihood(
+                    params, init_eval_observation, args.x_dim, args.K, true_partition_fn
+                )
+
                 train_steps = iteration - args.prefill
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
@@ -158,13 +189,18 @@ def main(args):
                             {
                                 "step": train_steps,
                                 "loss": logs["loss"],
+                                "log_p_hat_x_eval": log_p_hat_x_eval[0],
                                 "replay/size": len(replay),
                                 "epsilon": epsilon,
                                 "error/mean": jnp.abs(logs["error"]).mean(),
                                 "error/max": jnp.abs(logs["error"]).max(),
                             }
                         )
-                pbar.set_postfix(loss=f"{logs['loss']:.2f}", epsilon=f"{epsilon:.2f}")
+                pbar.set_postfix(
+                    loss=f"{logs['loss']:.2f}",
+                    epsilon=f"{epsilon:.2f}",
+                    MLL=f"{log_p_hat_x_eval[0]:.2f}",
+                )
 
     # Sample from the learned policy
     # TODO:
@@ -318,6 +354,12 @@ if __name__ == "__main__":
         type=int,
         required=True,
         help="How many samples to draw for the ground truth observations x?",
+    )
+    graph_args.add_argument(
+        "--num_eval_samples",
+        type=int,
+        required=True,
+        help="How many evalaution samples to draw for the ground truth observations x?",
     )
     graph_args.add_argument(
         "--x_dim", type=int, required=True, help="The number of observations variables?"

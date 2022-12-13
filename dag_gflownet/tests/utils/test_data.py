@@ -61,7 +61,7 @@ def test_get_value_policy_energy():
     assert energy == 0.0
 
     # Test potential fns
-    model, (full_cliques, _), data = get_random_graph(d=6, D=4, n=4)
+    model, (full_cliques, _), data = get_random_graph(d=6, D=4, n=4, m=1)
     unobserved_cliques = full_cliques.copy()
     gfn_state = (
         np.array([1, 1, 1, 0, 0, 0, 1, 1, 1, 1]),

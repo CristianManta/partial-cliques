@@ -146,8 +146,8 @@ def detailed_balance_loss_free_energy_to_go(
         jnp.squeeze(-partial_energies, axis=-1)  # FIXME: Perhaps the signs are reversed
         + log_pb
         - log_pf
-        + log_fetg_t
-        - log_fetg_tp1
+        - log_fetg_t
+        + log_fetg_tp1
     )
     if reduction == "mean":
         loss = jnp.mean(optax.huber_loss(error, delta=delta))

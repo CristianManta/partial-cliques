@@ -9,5 +9,6 @@
     "[python]": {
         "editor.defaultFormatter": "ms-python.python"
     },
-    "python.formatting.provider": "black"
+    "python.formatting.provider": "black",
+    "editor.defaultFormatter": "ms-python.black-formatter"
 }

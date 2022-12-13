@@ -178,12 +178,15 @@ class DAGGFlowNet:
 
         sampled_value = jax.random.categorical(subkey1, logits_value)
 
+        logpf = nn.log_softmax(logits_value)[jnp.arange(batch_size), sampled_value]
+
         actions = jnp.stack([clique_actions, sampled_value], axis=-1)
         actions = jnp.where(
             clique_actions == self.h_dim, -jnp.ones_like(actions), actions
         )
         logs = {
             "is_exploration": None,
+            "logpf": logpf,
         }
         return (actions, key, logs)
 
@@ -199,6 +202,27 @@ class DAGGFlowNet:
         log_true_partition_fn = jnp.log(true_partition_fn)
         log_p_hat = log_flow - log_true_partition_fn
         return log_p_hat
+
+    def compute_reversed_kl(self, full_observations, full_cliques, traj_pf, ugm_model):
+        # compute the reversed KL(GFN || GT)
+        assert full_observations.shape[0] == traj_pf.shape[0]
+        factors = ugm_model.get_factors()
+        # for every sample, compute the likelihood under the ugm_model
+        kl_terms = []
+        for i in range(full_observations.shape[0]):
+            # for every factor, compute the associated clique potential
+            total_potential = 0
+            for c_ind, factor in enumerate(factors):
+                total_potential += factor.values[
+                    tuple(
+                        full_observations[np.array(sorted(list(full_cliques[c_ind])))]
+                    )
+                ]
+            # store the KL term
+            kl_terms.append(
+                traj_pf[i] - total_potential + ugm_model.get_partition_function()
+            )
+        return jnp.mean(jnp.array(kl_terms))
 
     @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):

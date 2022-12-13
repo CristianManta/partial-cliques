@@ -202,6 +202,41 @@ def main(args):
                     MLL=f"{log_p_hat_x_eval[0]:.2f}",
                 )
 
+            if iteration % args.evaluate_every == 0:
+                # evaluete the GFN by sampling complete trajectories
+                eval_full_trajectories = []
+                eval_logpf = []
+                eval_obs = eval_env.reset()
+                for _ in range(100):
+                    logpf = 0.0
+                    eval_obs["graphs_tuple"] = to_graphs_tuple(
+                        full_cliques, eval_obs["gfn_state"], args.K, args.x_dim
+                    )
+                    actions, key, logs = gflownet.act(
+                        params, key, eval_obs, epsilon, args.x_dim, args.K
+                    )
+                    eval_obs, energies, dones = eval_env.step(actions)
+                    logpf += logs["logpf"]
+
+                    if dones[0][0]:
+                        eval_full_trajectories.append(eval_obs["gfn_state"][0][1])
+                        eval_logpf.append(logpf)
+                        eval_obs = eval_env.reset()
+                        logpf = 0.0
+                # calculate and print reversed KL
+                reversed_kl = gflownet.compute_reversed_kl(
+                    full_observations=jnp.stack(eval_full_trajectories, axis=0),
+                    full_cliques=full_cliques,
+                    traj_pf=jnp.array(eval_logpf),
+                    ugm_model=true_ugm,
+                )
+                print(f"Reversed KL: {reversed_kl}")
+                if not args.off_wandb:
+                    wandb.log(
+                        {
+                            "Reversed KL": reversed_kl,
+                        }
+                    )
     # Sample from the learned policy
     # TODO:
     # learned_graphs = sample_from(
@@ -338,6 +373,12 @@ if __name__ == "__main__":
         type=int,
         default=50,
         help="Frequency for logging (default: %(default)s)",
+    )
+    misc.add_argument(
+        "--evaluate_every",
+        type=int,
+        default=100,
+        help="Frequency for evaluating (default: %(default)s)",
     )
     misc.add_argument(
         "--off_wandb",

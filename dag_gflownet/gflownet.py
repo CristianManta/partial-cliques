@@ -73,7 +73,7 @@ class DAGGFlowNet:
             params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
         )
 
-        log_pf = nn.log_softmax(logits_value[jnp.arange(bsz), samples["actions"][:, 1]])
+        log_pf = nn.log_softmax(logits_value)[jnp.arange(bsz), samples["actions"][:, 1]]
         log_pb = jnp.zeros_like(log_pf)
         # log_pb = jnp.where(
         #     samples["dones"],
@@ -103,12 +103,10 @@ class DAGGFlowNet:
             x_dim,
             K,
         )
-        # mask log_pf and log_fetg_tp1 when dones is True
-        log_fetg_tp1 = jnp.where(
-            samples["dones"].squeeze(axis=-1), 0, log_fetg_tp1
-        )
-        log_pf = jnp.where(samples["dones"].squeeze(axis=-1), 0, log_pf)
+
         value_energies = samples["value_energies"]
+        fetg_tp1_done = samples["next_observed"].all(axis=-1)
+        log_fetg_tp1 = jnp.where(fetg_tp1_done, 0, log_fetg_tp1)
         unfiltered_loss, logs = detailed_balance_loss_free_energy_to_go(
             log_fetg_t=log_fetg_t,
             log_fetg_tp1=log_fetg_tp1,
@@ -118,10 +116,9 @@ class DAGGFlowNet:
             delta=self.delta,
             reduction="none",
         )
-        #loss = jnp.where(
-        #    samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
-        #).sum() / jnp.sum(~samples["dones"])
-        loss = unfiltered_loss.mean()
+        loss = jnp.where(
+            samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
+        ).sum() / jnp.sum(~samples["dones"])
         logs["loss"] = loss
         return (
             loss,
@@ -189,20 +186,21 @@ class DAGGFlowNet:
             "is_exploration": None,
         }
         return (actions, key, logs)
-    
-    def compute_data_log_likelihood(self, params, init_observation, x_dim, K, true_partition_fn):
-        graphs = init_observation["graphs_tuple"]        
+
+    def compute_data_log_likelihood(
+        self, params, init_observation, x_dim, K, true_partition_fn
+    ):
+        graphs = init_observation["graphs_tuple"]
         masks = init_observation["mask"].astype(jnp.float32)
         _, log_flow = self.value_model.apply(
             params.value_model, graphs, masks, x_dim, K
         )
-        
+
         log_true_partition_fn = jnp.log(true_partition_fn)
         log_p_hat = log_flow - log_true_partition_fn
-        return log_p_hat        
-        
+        return log_p_hat
 
-    # @partial(jit, static_argnums=(0, 4, 5))
+    @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

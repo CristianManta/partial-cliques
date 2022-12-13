@@ -196,7 +196,11 @@ def main(args):
                                 "error/max": jnp.abs(logs["error"]).max(),
                             }
                         )
-                pbar.set_postfix(loss=f"{logs['loss']:.2f}", epsilon=f"{epsilon:.2f}")
+                pbar.set_postfix(
+                    loss=f"{logs['loss']:.2f}",
+                    epsilon=f"{epsilon:.2f}",
+                    MLL=f"{log_p_hat_x_eval[0]:.2f}",
+                )
 
     # Sample from the learned policy
     # TODO:

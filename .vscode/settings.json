@@ -1,10 +1,13 @@
 {
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,
-    "python.testing.pytestArgs": ["dag_gflownet"],
+    "python.testing.pytestArgs": [
+        "dag_gflownet"
+    ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "[python]": {
         "editor.defaultFormatter": "ms-python.python"
-    }
+    },
+    "python.formatting.provider": "black"
 }

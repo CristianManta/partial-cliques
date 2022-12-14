@@ -120,4 +120,4 @@ def test_free_thoughts_policy_shapes_jit(setup):
     assert chosen_nodes_logits.shape == (masks.shape[0], masks.shape[1] - x_dim)
     assert value_nodes_logits.shape == (masks.shape[0], masks.shape[1] - x_dim, K)
     assert log_flows.shape == (masks.shape[0],)
-    assert log_PB.shape == (masks.shape[0],)
+    assert log_PB.shape == chosen_nodes_logits.shape

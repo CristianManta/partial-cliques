@@ -236,6 +236,9 @@ def free_thoughts_policy(graphs, masks, x_dim, K):
     temperature_value_selection = hk.get_parameter(
         "temperature", (), init=hk.initializers.Constant(1)
     )
+    temperature_PB = hk.get_parameter(
+        "temperature", (), init=hk.initializers.Constant(1)
+    )
 
     # OUTPUT: Computing the logits for the node selection
     chosen_nodes_logits = hk.nets.MLP(
@@ -250,8 +253,8 @@ def free_thoughts_policy(graphs, masks, x_dim, K):
     log_flows = jnp.squeeze(log_flows, axis=1)
 
     # OUTPUT: Computing log_PB
-    log_PB = hk.nets.MLP([128, 1], name="log_PB")(global_features)
-    log_PB = jnp.squeeze(log_PB, axis=1)
+    log_PB = hk.nets.MLP([128, 128, 128, h_dim], name="log_PB")(global_features)
+    log_PB = log_PB / temperature_PB
 
     # Computing, for each possible target node, the logits for the K possible
     # values that it can take

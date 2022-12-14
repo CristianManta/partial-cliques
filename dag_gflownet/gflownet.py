@@ -203,24 +203,30 @@ class DAGGFlowNet:
         log_p_hat = log_flow - log_true_partition_fn
         return log_p_hat
 
-    def compute_reversed_kl(self, full_observations, full_cliques, traj_pf, ugm_model):
-        # compute the reversed KL(GFN || GT)
+    def compute_reverse_kl(self, full_observations, full_cliques, traj_pf, ugm_model):
+        # compute the reverse KL(GFN || GT)
         assert full_observations.shape[0] == traj_pf.shape[0]
         factors = ugm_model.get_factors()
         # for every sample, compute the likelihood under the ugm_model
         kl_terms = []
         for i in range(full_observations.shape[0]):
             # for every factor, compute the associated clique potential
-            total_potential = 0
+            total_log_potential = 0
             for c_ind, factor in enumerate(factors):
-                total_potential += factor.values[
-                    tuple(
-                        full_observations[np.array(sorted(list(full_cliques[c_ind])))]
-                    )
-                ]
+                total_log_potential += np.log(
+                    factor.values[
+                        tuple(
+                            full_observations[i][
+                                np.array(sorted(list(full_cliques[c_ind])))
+                            ]
+                        )
+                    ]
+                )
             # store the KL term
             kl_terms.append(
-                traj_pf[i] - total_potential + ugm_model.get_partition_function()
+                traj_pf[i]
+                - total_log_potential
+                + np.log(ugm_model.get_partition_function())
             )
         return jnp.mean(jnp.array(kl_terms))
 

@@ -223,18 +223,18 @@ def main(args):
                         eval_logpf.append(logpf)
                         eval_obs = eval_env.reset()
                         logpf = 0.0
-                # calculate and print reversed KL
-                reversed_kl = gflownet.compute_reversed_kl(
+                # calculate and print reverse KL
+                reverse_kl = gflownet.compute_reverse_kl(
                     full_observations=jnp.stack(eval_full_trajectories, axis=0),
                     full_cliques=full_cliques,
                     traj_pf=jnp.array(eval_logpf),
                     ugm_model=true_ugm,
                 )
-                print(f"Reversed KL: {reversed_kl}")
+                print(f"Reverse KL: {reverse_kl}")
                 if not args.off_wandb:
                     wandb.log(
                         {
-                            "Reversed KL": reversed_kl,
+                            "Reverse KL": reverse_kl,
                         }
                     )
     # Sample from the learned policy

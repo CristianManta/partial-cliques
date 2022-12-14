@@ -7,7 +7,11 @@ import jraph
 import haiku as hk
 
 from dag_gflownet.utils.jraph_utils import Graph, to_graphs_tuple
-from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy
+from dag_gflownet.nets.gnn.gflownet import (
+    clique_policy,
+    value_policy,
+    free_thoughts_policy,
+)
 from dag_gflownet.utils.data import get_clique_selection_mask
 
 
@@ -95,3 +99,25 @@ def test_value_policy_shapes_jit(setup):
 
     assert log_policy_values.shape == (masks.shape[0], K)
     assert log_flows.shape == (masks.shape[0],)
+
+
+def test_free_thoughts_policy_shapes_jit(setup):
+    graphs, masks, x_dim, K = setup
+
+    seed = 0
+    key = random.PRNGKey(seed)
+
+    # Initializing the model
+    model = hk.without_apply_rng(hk.transform(free_thoughts_policy))
+    params = model.init(key, graphs, masks, x_dim, K)
+
+    # Applying the model
+    forward = jax.jit(model.apply, static_argnums=(3, 4))
+    chosen_nodes_logits, value_nodes_logits, log_flows, log_PB = forward(
+        params, graphs, masks, x_dim, K
+    )
+
+    assert chosen_nodes_logits.shape == (masks.shape[0], masks.shape[1] - x_dim)
+    assert value_nodes_logits.shape == (masks.shape[0], masks.shape[1] - x_dim, K)
+    assert log_flows.shape == (masks.shape[0],)
+    assert log_PB.shape == (masks.shape[0],)

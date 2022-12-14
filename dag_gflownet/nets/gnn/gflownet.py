@@ -4,7 +4,7 @@ import jraph
 import math
 from functools import partial
 
-from jax import lax, nn, jit
+from jax import vmap
 
 from dag_gflownet.utils.gflownet import log_policy_cliques
 
@@ -139,6 +139,181 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
     return log_policy_cliques(logits / temperature, stop, masks)
 
 
+def free_thoughts_policy(graphs, masks, x_dim, K):
+    """
+    Parameters
+    ----------
+    graphs: namedtuple `Graph` of (jraph._src.graph.GraphsTuple, jraph._src.graph.GraphsTuple)
+        Each element of the tuple is a batch of graphs encoded as a single GraphsTuple.
+        Each graph in the batch corresponds to the current
+        state in a parallel instantiation of the environment (there are
+        `batch_size` parallel environments).
+        The distinction between the two elements in the tuple is that the first
+        element encodes in the node features the node identities, while the
+        second element encodes the node values (which are discrete).
+    masks: np.ndarray of shape (batch_size, h_dim+x_dim)
+        Batch of masks to prevent a given node from being sampled twice by the clique policy.
+        In addition, we also mask the nodes which are not part of a current incomplete
+        clique. masks[i, j] = 0 iff node j from batch i is unavailable
+        for sampling at this step. h_dim is the maximal number of nodes to sample from.
+        In our current setting, it corresponds to the number of nodes in the ground truth graph.
+    x_dim: int
+        Number of low-level variables.
+    K: int
+        Number of different discrete values that the nodes can take.
+    Returns
+    -------
+
+    chosen_nodes_logits: jnp.DeviceArray of shape (batch_size, num_actions) =
+    (batch_size, h_dim)
+        Logits corresponding to the categorical distribution over the h_dim nodes
+        to sample (attention policy).
+    value_nodes_logits: jnp.DeviceArray of shape (batch_size, h_dim, K)
+        Logits for the categorical distribution over the
+        K choices of the value for each possible target node to be sampled
+    log_flows: jnp.DeviceArray of shape (batch_size,)
+        Estimated log flow passing through the current state.
+    log_PB: jnp.DeviceArray of shape (batch_size,)
+        Learned backward flows
+    """
+
+    assert K == 2
+
+    batch_size, num_variables = masks.shape
+    h_dim = num_variables - x_dim
+    masks = masks[:, :h_dim]
+    current_sampling_feature = num_variables + K + 1
+
+    # Embedding of the nodes & edges
+    node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=128)
+    """
+    + 2 because we need to reserve a special embedding for: 
+    1) the (target) node with the missing value (to be sampled),     
+    2) the dummy index for nodes that are "padded" so that the GraphsTuple 
+        has a consistent size for JAX compilation
+    """
+
+    edge_embedding = hk.get_parameter(
+        "edge_embed", shape=(1, 128), init=hk.initializers.TruncatedNormal()
+    )
+
+    # Embeddings for the policy head
+    structural_embeddings = node_embeddings_list(graphs.structure.nodes)
+    value_embeddings = node_embeddings_list(graphs.values.nodes)
+    node_embeddings = structural_embeddings + value_embeddings
+
+    graphs_tuple = graphs.values._replace(
+        nodes=node_embeddings,
+        edges=jnp.repeat(edge_embedding, graphs.values.edges.shape[0], axis=0),
+        globals=jnp.zeros((graphs.values.n_node.shape[0], 1)),
+    )
+
+    # Define graph network updates
+    @jraph.concatenated_args
+    def update_node_fn(features):
+        return hk.nets.MLP([128, 128], name="node")(features)
+
+    @jraph.concatenated_args
+    def update_edge_fn(features):
+        return hk.nets.MLP([128, 128], name="edge")(features)
+
+    @jraph.concatenated_args
+    def update_global_fn(features):
+        return hk.nets.MLP([128, 128], name="global")(features)
+
+    graph_net = jraph.GraphNetwork(
+        update_edge_fn=update_edge_fn,
+        update_node_fn=update_node_fn,
+        update_global_fn=update_global_fn,
+    )
+    features = graph_net(graphs_tuple)
+    global_features = features.globals[:batch_size]
+
+    # Initialize the temperature parameters to 1
+    temperature_node_selection = hk.get_parameter(
+        "temperature", (), init=hk.initializers.Constant(1)
+    )
+    temperature_value_selection = hk.get_parameter(
+        "temperature", (), init=hk.initializers.Constant(1)
+    )
+
+    # OUTPUT: Computing the logits for the node selection
+    chosen_nodes_logits = hk.nets.MLP(
+        [128, 128, 128, h_dim], name="chosen_nodes_logits"
+    )(
+        global_features
+    )  # Maybe 3 layers is too much. Can try different things here. Alternative: can try using node_features instead.
+    chosen_nodes_logits = chosen_nodes_logits / temperature_node_selection
+
+    # OUTPUT: Computing the log flows
+    log_flows = hk.nets.MLP([128, 1], name="log_flows")(global_features)
+    log_flows = jnp.squeeze(log_flows, axis=1)
+
+    # OUTPUT: Computing log_PB
+    log_PB = hk.nets.MLP([128, 1], name="log_PB")(global_features)
+    log_PB = jnp.squeeze(log_PB, axis=1)
+
+    # Computing, for each possible target node, the logits for the K possible
+    # values that it can take
+    def compute_logits_for_target_node(node_ix):
+        # Replacing the node at index node_ix (for each element in the batch)
+        # by its embedding signaling that it has been targeted for sampling
+
+        graphs_tuple_targetted = graphs_tuple._replace(nodes=graphs.values.nodes)
+        for i in range(batch_size):
+            new_nodes = graphs_tuple_targetted.nodes.at[
+                i * num_variables + node_ix
+            ].set(current_sampling_feature)
+
+            graphs_tuple_targetted = graphs_tuple_targetted._replace(nodes=new_nodes)
+
+        # Computing the new embeddings based on the fact that we updated the flag in the
+        # values graph to indicate what is the node to sample the value of
+        new_value_embeddings = node_embeddings_list(graphs_tuple_targetted.nodes)
+        new_node_embeddings = structural_embeddings + new_value_embeddings
+
+        graphs_tuple_targetted_pre = graphs_tuple_targetted._replace(
+            nodes=graphs_tuple_targetted.nodes
+        )  # Just saving a copy for later
+        graphs_tuple_targetted = graphs_tuple_targetted._replace(
+            nodes=new_node_embeddings
+        )
+
+        features_targetted = graph_net(graphs_tuple_targetted)
+        node_features = features_targetted.nodes[: batch_size * num_variables]
+
+        # Project the nodes features into keys, queries & values
+        node_features = hk.Linear(128 * 3, name="projection")(node_features)
+        queries, keys, values = jnp.split(node_features, 3, axis=1)
+
+        # Self-attention layer
+        node_features = hk.MultiHeadAttention(
+            num_heads=4, key_size=32, w_init_scale=2.0
+        )(queries, keys, values)
+
+        all_logits = hk.nets.MLP([128, K], name="value_logits")(node_features)
+
+        targets = (
+            graphs_tuple_targetted_pre.nodes[: batch_size * num_variables]
+            == current_sampling_feature
+        )  # target nodes to fill values
+
+        targets_ix = jnp.nonzero(targets, size=batch_size)
+        target_logits = all_logits[targets_ix]
+
+        return target_logits / temperature_value_selection
+
+    # OUTPUT: Compute logits for the values
+    possible_target_nodes = jnp.arange(h_dim)
+    value_logits_fn = vmap(compute_logits_for_target_node, in_axes=(0))
+    value_nodes_logits = value_logits_fn(
+        possible_target_nodes
+    )  # Shape: (h_dim, batch_size, K)
+    value_nodes_logits = jnp.transpose(value_nodes_logits, (1, 0, 2))
+
+    return (chosen_nodes_logits, value_nodes_logits, log_flows, log_PB)
+
+
 def value_policy(graphs, masks, x_dim, K):
     """
     Parameters
@@ -163,7 +338,7 @@ def value_policy(graphs, masks, x_dim, K):
         Number of different discrete values that the nodes can take.
     Returns
     -------
-    logits_values: jnp.DeviceArray of shape (batch_size,)
+    logits_values: jnp.DeviceArray of shape (batch_size, K)
         Unnormalized log probabilities for the categorical distribution over the
         K choices of the value for the target node to be sampled
     log_flows: jnp.DeviceArray of shape (batch_size,)
@@ -256,10 +431,8 @@ def value_policy(graphs, masks, x_dim, K):
         queries, keys, values
     )
 
-    all_logits = hk.nets.MLP([128, K], name="logit")(
-        node_features
-    )  # Assumption that k = 2 here (last layer)
-    # all_logits = jnp.squeeze(all_logits)
+    all_logits = hk.nets.MLP([128, K], name="logit")(node_features)
+
     targets = (
         graphs.values.nodes[: batch_size * num_variables] == current_sampling_feature
     )  # target nodes to fill values

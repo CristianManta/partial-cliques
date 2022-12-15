@@ -321,7 +321,9 @@ def value_policy_MLP(graphs, masks, x_dim, K):
     current_sampling_feature = num_variables + K + 1
 
     # Embedding of the nodes & edges
-    node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=embedding_dimensions)
+    node_embeddings_list = hk.Embed(
+        num_variables + K + 2, embed_dim=embedding_dimensions
+    )
     """
     + 2 because we need to reserve a special embedding for: 
     1) the (target) node with the missing value (to be sampled),     
@@ -360,7 +362,7 @@ def value_policy_MLP(graphs, masks, x_dim, K):
         [embedding_dimensions, embedding_dimensions], name="node_features"
     )(x_h_merged_embeddings)
     global_features = hk.nets.MLP(
-        [embedding_dimensions, embedding_dimensions, 1], name="global_features"
+        [embedding_dimensions, embedding_dimensions], name="global_features"
     )(x_h_merged_embeddings_flow)
 
     all_logits = hk.nets.MLP([embedding_dimensions, K], name="logit")(node_features)

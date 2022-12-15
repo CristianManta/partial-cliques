@@ -118,7 +118,7 @@ class DAGGFlowNet:
         )
         loss = jnp.where(
             samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
-        ).sum() / jnp.sum(~samples["dones"])
+        ).sum() / (jnp.sum(~samples["dones"]) + 1e-18)
         logs["loss"] = loss
         return (
             loss,
@@ -230,7 +230,7 @@ class DAGGFlowNet:
             )
         return jnp.mean(jnp.array(kl_terms))
 
-    @partial(jit, static_argnums=(0, 4, 5))
+    # @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

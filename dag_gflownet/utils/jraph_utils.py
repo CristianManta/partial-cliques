@@ -73,9 +73,9 @@ def to_graphs_tuple(
         num_variables = gfn_state[0].shape[0]
         h_dim = num_variables - x_dim
         structure_node_features = np.arange(num_variables)
-        structure_node_features = np.where(
-            gfn_state[0] == 0, num_variables + K, structure_node_features
-        )
+        # structure_node_features = np.where(
+        #    gfn_state[0] == 0, num_variables + K, structure_node_features
+        # )
 
         edges = []
 

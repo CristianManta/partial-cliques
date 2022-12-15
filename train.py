@@ -111,7 +111,8 @@ def main(args):
 
     # Create the GFlowNet & initialize parameters
     gflownet = DAGGFlowNet(delta=args.delta, x_dim=args.x_dim, h_dim=args.h_dim)
-    optimizer = optax.adam(args.lr)
+    # optimizer = optax.adam(args.lr)
+    optimizer = optax.sgd(0.01)
     params, state = gflownet.init(
         subkey,
         optimizer,

@@ -230,7 +230,7 @@ class DAGGFlowNet:
             )
         return jnp.mean(jnp.array(kl_terms))
 
-    # @partial(jit, static_argnums=(0, 4, 5))
+    @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K):
         grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
 

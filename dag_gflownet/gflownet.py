@@ -40,7 +40,7 @@ class DAGGFlowNet:
     def __init__(self, x_dim, h_dim, delta=1.0):
 
         clique_model = clique_policy
-        value_model = value_policy_MLP
+        value_model = value_policy
 
         self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
         self.value_model = hk.without_apply_rng(hk.transform(value_model))

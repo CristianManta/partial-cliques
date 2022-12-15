@@ -9,7 +9,7 @@ from jax import grad, random, jit, nn
 
 from collections import namedtuple
 
-from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy
+from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy, value_policy_MLP
 from dag_gflownet.utils.gflownet import (
     uniform_log_policy,
     detailed_balance_loss_free_energy_to_go,
@@ -40,7 +40,7 @@ class DAGGFlowNet:
     def __init__(self, x_dim, h_dim, delta=1.0):
 
         clique_model = clique_policy
-        value_model = value_policy
+        value_model = value_policy_MLP
 
         self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
         self.value_model = hk.without_apply_rng(hk.transform(value_model))

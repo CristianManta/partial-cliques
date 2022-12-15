@@ -4,7 +4,7 @@ import jraph
 import math
 from functools import partial
 
-from jax import lax, nn, jit
+from jax import lax, nn, jit, vmap
 
 from dag_gflownet.utils.gflownet import log_policy_cliques
 
@@ -163,7 +163,7 @@ def value_policy(graphs, masks, x_dim, K):
         Number of different discrete values that the nodes can take.
     Returns
     -------
-    logits_values: jnp.DeviceArray of shape (batch_size,)
+    logits_values: jnp.DeviceArray of shape (batch_size, K)
         Unnormalized log probabilities for the categorical distribution over the
         K choices of the value for the target node to be sampled
     log_flows: jnp.DeviceArray of shape (batch_size,)
@@ -274,3 +274,103 @@ def value_policy(graphs, masks, x_dim, K):
     temperature = hk.get_parameter("temperature", (), init=hk.initializers.Constant(1))
 
     return (target_logits / temperature, log_flows)
+
+
+def value_policy_MLP(graphs, masks, x_dim, K):
+    """
+    Parameters
+    ----------
+    graphs: namedtuple `Graph` of (jraph._src.graph.GraphsTuple, jraph._src.graph.GraphsTuple)
+        Each element of the tuple is a batch of graphs encoded as a single GraphsTuple.
+        Each graph in the batch corresponds to the current
+        state in a parallel instantiation of the environment (there are
+        `batch_size` parallel environments).
+        The distinction between the two elements in the tuple is that the first
+        element encodes in the node features the node identities, while the
+        second element encodes the node values (which are discrete).
+    masks: np.ndarray of shape (batch_size, h_dim+x_dim)
+        Batch of masks to prevent a given node from being sampled twice by the clique policy.
+        In addition, we also mask the nodes which are not part of a current incomplete
+        clique. masks[i, j] = 0 iff node j from batch i is unavailable
+        for sampling at this step. h_dim is the maximal number of nodes to sample from.
+        In our current setting, it corresponds to the number of nodes in the ground truth graph.
+    x_dim: int
+        Number of low-level variables.
+    K: int
+        Number of different discrete values that the nodes can take.
+    Returns
+    -------
+    logits_values: jnp.DeviceArray of shape (batch_size, K)
+        Unnormalized log probabilities for the categorical distribution over the
+        K choices of the value for the target node to be sampled
+    log_flows: jnp.DeviceArray of shape (batch_size,)
+        Estimated log flow passing through the current state.
+    """
+
+    ############# Parameters
+
+    embedding_dimensions = 256
+
+    #######################
+
+    assert K == 2
+
+    batch_size, num_variables = masks.shape
+    h_dim = num_variables - x_dim
+    masks = masks[:, :h_dim]
+    current_sampling_feature = num_variables + K + 1
+
+    # Embedding of the nodes & edges
+    node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=embedding_dimensions)
+    """
+    + 2 because we need to reserve a special embedding for: 
+    1) the (target) node with the missing value (to be sampled),     
+    2) the dummy index for nodes that are "padded" so that the GraphsTuple 
+        has a consistent size for JAX compilation
+    """
+
+    # Preparing a separate copy of the embeddings for the flow estimator
+    # Setting the target node feature to be the same as the unobserved ones
+    flow_estimator_values_nodes = jnp.where(
+        graphs.values.nodes == current_sampling_feature,
+        num_variables + K,
+        graphs.values.nodes,
+    )
+    flow_estimator_value_embeddings = node_embeddings_list(flow_estimator_values_nodes)
+
+    # Embeddings for the policy head
+    structural_embeddings = node_embeddings_list(graphs.structure.nodes)
+    value_embeddings = node_embeddings_list(graphs.values.nodes)
+    node_embeddings = structural_embeddings + value_embeddings
+
+    # embeddings for the flow estimator
+    flow_estimator_node_embeddings = (
+        structural_embeddings + flow_estimator_value_embeddings
+    )
+
+    split_empeddings = jnp.array(jnp.split(node_embeddings, batch_size))
+    x_h_merged_embeddings = jnp.reshape(split_empeddings, (batch_size, -1))
+
+    split_empeddings_flow = jnp.array(
+        jnp.split(flow_estimator_node_embeddings, batch_size)
+    )
+    x_h_merged_embeddings_flow = jnp.reshape(split_empeddings_flow, (batch_size, -1))
+
+    node_features = hk.nets.MLP(
+        [embedding_dimensions, embedding_dimensions], name="node_features"
+    )(x_h_merged_embeddings)
+    global_features = hk.nets.MLP(
+        [embedding_dimensions, embedding_dimensions, 1], name="global_features"
+    )(x_h_merged_embeddings_flow)
+
+    all_logits = hk.nets.MLP([embedding_dimensions, K], name="logit")(node_features)
+
+    # Initialize the temperature parameter to 1
+    temperature = hk.get_parameter("temperature", (), init=hk.initializers.Constant(1))
+
+    log_flows = hk.nets.MLP([embedding_dimensions, 1], name="log_flows")(
+        global_features
+    )
+    log_flows = jnp.squeeze(log_flows, axis=1)
+
+    return (all_logits / temperature, log_flows)

@@ -66,7 +66,11 @@ def get_data(name, args, rng=default_rng()):
 
     elif name == "random_latent_graph":
         graph, (cliques, factors), data = get_random_graph(
-            d=args.h_dim, D=args.x_dim, n=args.num_samples, m=args.num_eval_samples, rng=rng
+            d=args.h_dim,
+            D=args.x_dim,
+            n=args.num_samples,
+            m=args.num_eval_samples,
+            rng=rng,
         )
         graph = (graph, cliques, factors)
         score = None

@@ -10,6 +10,7 @@ from jax import grad, random, jit, nn
 from collections import namedtuple
 
 from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy, value_policy_MLP
+from dag_gflownet.nets.transformer.gflownet import value_policy_transformer
 from dag_gflownet.utils.gflownet import (
     uniform_log_policy,
     detailed_balance_loss_free_energy_to_go,
@@ -40,10 +41,10 @@ class DAGGFlowNet:
     def __init__(self, x_dim, h_dim, delta=1.0):
 
         clique_model = clique_policy
-        value_model = value_policy
+        value_model = value_policy_transformer
 
         self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
-        self.value_model = hk.without_apply_rng(hk.transform(value_model))
+        self.value_model = hk.transform(value_model)
         self.delta = delta
         self.x_dim = x_dim
         self.h_dim = h_dim
@@ -52,7 +53,7 @@ class DAGGFlowNet:
         self._optimizer = None
 
     def loss(
-        self, params, samples, x_dim, K
+        self, params, samples, x_dim, K, forward_key
     ):  # TODO: Need to know how the samples look like
         # Then evaluate the models to obtain its log-probs
 
@@ -68,9 +69,17 @@ class DAGGFlowNet:
         """
         # OR
         # calculate batch size
+
+        forward_key, _ = jax.random.split(forward_key, 2)
+
         bsz = samples["observed"].shape[0]
         logits_value, value_log_flows = self.value_model.apply(
-            params.value_model, samples["graphs_tuple"], samples["mask"], x_dim, K
+            params.value_model,
+            forward_key,
+            samples["graphs_tuple"],
+            samples["mask"],
+            x_dim,
+            K,
         )
 
         log_pf = nn.log_softmax(logits_value)[jnp.arange(bsz), samples["actions"][:, 1]]
@@ -98,6 +107,7 @@ class DAGGFlowNet:
         log_fetg_t = value_log_flows
         _, log_fetg_tp1 = self.value_model.apply(
             params.value_model,
+            forward_key,
             samples["next_graphs_tuple"],
             samples["next_mask"],
             x_dim,
@@ -120,10 +130,8 @@ class DAGGFlowNet:
             samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
         ).sum() / (jnp.sum(~samples["dones"]) + 1e-18)
         logs["loss"] = loss
-        return (
-            loss,
-            logs,
-        )
+        logs["forward_key"] = forward_key
+        return (loss, logs)
 
     # @partial(jit, static_argnums=(0, 5, 6))
     def act(self, params, key, observations, epsilon, x_dim, K, temperature=1.0):
@@ -131,7 +139,7 @@ class DAGGFlowNet:
         graphs = observations["graphs_tuple"]
         masks = observations["mask"].astype(jnp.float32)
         batch_size = masks.shape[0]
-        key, subkey1, subkey2 = random.split(key, 3)
+        key, subkey1, forward_key = random.split(key, 3)
 
         # First get the clique policy
         log_probs_clique = self.clique_model.apply(
@@ -173,7 +181,7 @@ class DAGGFlowNet:
 
         # use the value GFN to sample a value for the variable we just observed
         logits_value, log_flow = self.value_model.apply(
-            params.value_model, graphs, masks, x_dim, K
+            params.value_model, forward_key, graphs, masks, x_dim, K
         )
 
         sampled_value = jax.random.categorical(subkey1, logits_value / temperature)
@@ -191,17 +199,18 @@ class DAGGFlowNet:
         return (actions, key, logs)
 
     def compute_data_log_likelihood(
-        self, params, init_observation, x_dim, K, true_partition_fn
+        self, params, init_observation, x_dim, K, true_partition_fn, forward_key
     ):
+        forward_key, _ = jax.random.split(forward_key, 2)
         graphs = init_observation["graphs_tuple"]
         masks = init_observation["mask"].astype(jnp.float32)
         _, log_flow = self.value_model.apply(
-            params.value_model, graphs, masks, x_dim, K
+            params.value_model, forward_key, graphs, masks, x_dim, K
         )
 
         log_true_partition_fn = jnp.log(true_partition_fn)
         log_p_hat = log_flow - log_true_partition_fn
-        return log_p_hat
+        return log_p_hat, forward_key
 
     def compute_reverse_kl(self, full_observations, full_cliques, traj_pf, ugm_model):
         # compute the reverse KL(GFN || GT)
@@ -231,14 +240,17 @@ class DAGGFlowNet:
         return jnp.mean(jnp.array(kl_terms))
 
     @partial(jit, static_argnums=(0, 4, 5))
-    def step(self, params, state, samples, x_dim, K):
-        grads, logs = grad(self.loss, has_aux=True)(params, samples, x_dim, K)
+    def step(self, params, state, samples, x_dim, K, forward_key):
+        grads, logs = grad(self.loss, has_aux=True)(
+            params, samples, x_dim, K, forward_key
+        )
+        forward_key = logs["forward_key"]
 
         # Update the online params
         updates, state = self.optimizer.update(grads, state, params)
         params = optax.apply_updates(params, updates)
 
-        return (params, state, logs)
+        return (params, state, logs, forward_key)
 
     def init(self, key, optimizer, graph, mask, x_dim, K):
         # Set the optimizer

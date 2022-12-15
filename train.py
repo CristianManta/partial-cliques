@@ -165,13 +165,18 @@ def main(args):
             if iteration >= args.prefill:
                 # Update the parameters of the GFlowNet
                 samples = replay.sample(batch_size=args.batch_size, rng=rng)
-                params, state, logs = gflownet.step(
-                    params, state, samples, args.x_dim, args.K
+                params, state, logs, key = gflownet.step(
+                    params, state, samples, args.x_dim, args.K, key
                 )
 
                 # Evaluation: compute log p(x_eval)
-                log_p_hat_x_eval = gflownet.compute_data_log_likelihood(
-                    params, init_eval_observation, args.x_dim, args.K, true_partition_fn
+                log_p_hat_x_eval, key = gflownet.compute_data_log_likelihood(
+                    params,
+                    init_eval_observation,
+                    args.x_dim,
+                    args.K,
+                    true_partition_fn,
+                    key,
                 )
 
                 train_steps = iteration - args.prefill

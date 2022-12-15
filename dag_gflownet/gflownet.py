@@ -126,7 +126,7 @@ class DAGGFlowNet:
         )
 
     # @partial(jit, static_argnums=(0, 5, 6))
-    def act(self, params, key, observations, epsilon, x_dim, K):
+    def act(self, params, key, observations, epsilon, x_dim, K, temperature=1.0):
 
         graphs = observations["graphs_tuple"]
         masks = observations["mask"].astype(jnp.float32)
@@ -176,7 +176,7 @@ class DAGGFlowNet:
             params.value_model, graphs, masks, x_dim, K
         )
 
-        sampled_value = jax.random.categorical(subkey1, logits_value)
+        sampled_value = jax.random.categorical(subkey1, logits_value / temperature)
 
         logpf = nn.log_softmax(logits_value)[jnp.arange(batch_size), sampled_value]
 

@@ -145,7 +145,7 @@ def main(args):
                 full_cliques, observations["gfn_state"], args.K, args.x_dim
             )
             actions, key, logs = gflownet.act(
-                params, key, observations, epsilon, args.x_dim, args.K
+                params, key, observations, epsilon, args.x_dim, args.K, temperature=2.0
             )  # TODO:
             next_observations, energies, dones = env.step(actions)
             replay.add(  # TODO:
@@ -214,7 +214,13 @@ def main(args):
                             full_cliques, eval_obs["gfn_state"], args.K, args.x_dim
                         )
                         actions, key, logs = gflownet.act(
-                            params, key, eval_obs, epsilon, args.x_dim, args.K
+                            params,
+                            key,
+                            eval_obs,
+                            epsilon,
+                            args.x_dim,
+                            args.K,
+                            temperature=1.0,
                         )
                         eval_obs, energies, dones = eval_env.step(actions)
                         logpf += logs["logpf"]

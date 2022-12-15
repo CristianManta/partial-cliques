@@ -178,7 +178,7 @@ def value_policy(graphs, masks, x_dim, K):
     current_sampling_feature = num_variables + K + 1
 
     # Embedding of the nodes & edges
-    node_embeddings_list = hk.Embed(h_dim + K + 2, embed_dim=128)
+    node_embeddings_list = hk.Embed(num_variables + K + 2, embed_dim=128)
     """
     + 2 because we need to reserve a special embedding for: 
     1) the (target) node with the missing value (to be sampled),     

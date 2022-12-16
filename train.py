@@ -139,7 +139,7 @@ def main(args):
     )
 
     # Plotting
-    figure, axis = plt.subplots(2)
+    figure, axis = plt.subplots(2, figsize=(15, 15))
     plt.subplots_adjust(hspace=1)
     axis[0].set_title("Value Policy Loss")
     axis[0].set(xlabel="Training Step")

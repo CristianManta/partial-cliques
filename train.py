@@ -273,6 +273,13 @@ def main(args):
     axis[1].plot(steps, log_likelihoods_hat, label=r"$\log \hat{Z}_x - \log Z$")
     axis[1].legend()
     plt.savefig(f"plots_{args.run_number}.png")
+
+    steps = np.array(steps)
+    losses = np.array(losses)
+    log_likelihoods_hat = np.array(log_likelihoods_hat)
+    np.save("steps", steps)
+    np.save("losses", losses)
+    np.save("log_likelihoods_hat", log_likelihoods_hat)
     # Sample from the learned policy
     # TODO:
     # learned_graphs = sample_from(

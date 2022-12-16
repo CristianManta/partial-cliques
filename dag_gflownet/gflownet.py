@@ -126,8 +126,11 @@ class DAGGFlowNet:
             delta=self.delta,
             reduction="none",
         )
-        num_not_dones = jnp.sum(~samples["dones"])
-        loss = jnp.sum(unfiltered_loss[:num_not_dones]) / (num_not_dones + 1e-18)
+
+        loss = jnp.where(
+            samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
+        ).sum() / (jnp.sum(~samples["dones"]) + 1e-18)
+
         logs["loss"] = loss
         logs["forward_key"] = forward_key
         return (loss, logs)

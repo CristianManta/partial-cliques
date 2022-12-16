@@ -136,3 +136,6 @@ dmypy.json
 
 # Workspace settings (vscode)
 settings.json
+
+# Playground
+playground.ipynb

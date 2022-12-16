@@ -40,6 +40,8 @@ def test_value_policy_transformer(setup):
     batch_size = masks.shape[0]
     num_variables = masks.shape[1]
     for i in range(batch_size):
+        if i == 1: # Suppose that we don't observe the second "h" in the batch
+            continue
         new_nodes = graphs.values.nodes.at[i * num_variables].set(num_variables + K + 1)
 
         graphs = Graph(

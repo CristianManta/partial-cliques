@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 import haiku as hk
+from copy import deepcopy
 
 from dag_gflownet.nets.transformer.transformers import Transformer
 
@@ -84,9 +85,31 @@ def value_policy_transformer(graphs, masks, x_dim, K):
         all_logits, (batch_size * num_variables, -1)
     )  # Prepare for indexing with targets_ix
 
-    targets = (
-        graphs.values.nodes[: batch_size * num_variables] == current_sampling_feature
+    ##############################################################
+    # This entire maneuvre is there to make sure that the 
+    # output logits corresponding to the NOT done elements in the batch 
+    # (i.e. where we still need to sample a value) are aligned with the 
+    # shape of the actions
+    
+    reshaped_nodes = jnp.reshape(graphs.values.nodes, (batch_size, num_variables))
+
+    reshaped_nodes_copy = deepcopy(reshaped_nodes)
+    dones = ~jnp.any(reshaped_nodes_copy == current_sampling_feature, axis=-1)
+    dones = jnp.expand_dims(dones, axis=1)
+
+    missing_piece = jnp.zeros((batch_size, num_variables - 1), dtype=bool)
+    dones = jnp.concatenate((dones, missing_piece), axis=1)
+
+    reshaped_nodes_copy = jnp.where( # Filling "dones" elements of the batch with the sampling feature
+        dones, current_sampling_feature, reshaped_nodes_copy # to keep alignment
     )
+
+    reshaped_nodes_copy = jnp.reshape( # Reshaping back to original format
+        reshaped_nodes_copy, (batch_size * num_variables,)
+    )
+    ###############################################################
+
+    targets = reshaped_nodes_copy == current_sampling_feature
 
     targets_ix = jnp.nonzero(targets, size=batch_size)
 

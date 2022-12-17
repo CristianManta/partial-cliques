@@ -101,7 +101,9 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         )
         for i in range(bsz):
             assert np.all(
-                (self._state["gfn_state"][i][0][obs_var] == 0)[actions[i, 0] != -1]
+                (self._state["gfn_state"][i][0][obs_var] == 0)[
+                    actions[i, 0] != -1
+                ]  # FIXME: There was an assertion error here when running x_dim=4, h_dim=6
             )
             if actions[i, 0] == -1:
                 continue

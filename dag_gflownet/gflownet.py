@@ -76,7 +76,7 @@ class DAGGFlowNet:
         logits_value, value_log_flows = self.value_model.apply(
             params.value_model,
             forward_key,
-            samples["graphs_tuple"],
+            samples["values"],
             samples["mask"],
             x_dim,
             K,
@@ -108,7 +108,7 @@ class DAGGFlowNet:
         _, log_fetg_tp1 = self.value_model.apply(
             params.value_model,
             forward_key,
-            samples["next_graphs_tuple"],
+            samples["next_values"],
             samples["next_mask"],
             x_dim,
             K,
@@ -173,6 +173,7 @@ class DAGGFlowNet:
             return actions, key, logs
         """
         for i in range(batch_size):
+            """
             new_nodes = graphs.values.nodes.at[i * self.N + clique_actions[i]].set(
                 self.N + K + 1
             )
@@ -180,10 +181,17 @@ class DAGGFlowNet:
                 structure=graphs.structure,
                 values=graphs.values._replace(nodes=new_nodes),
             )
+            """
+            observations["gfn_state"][i][1][clique_actions[i]] = K + 1
 
         # use the value GFN to sample a value for the variable we just observed
         logits_value, log_flow = self.value_model.apply(
-            params.value_model, forward_key, graphs, masks, x_dim, K
+            params.value_model,
+            forward_key,
+            observations["gfn_state"][0][1].reshape(1, -1),
+            masks,
+            x_dim,
+            K,
         )
 
         sampled_value = jax.random.categorical(subkey1, logits_value / temperature)
@@ -207,7 +215,12 @@ class DAGGFlowNet:
         graphs = init_observation["graphs_tuple"]
         masks = init_observation["mask"].astype(jnp.float32)
         _, log_flow = self.value_model.apply(
-            params.value_model, forward_key, graphs, masks, x_dim, K
+            params.value_model,
+            forward_key,
+            init_observation["gfn_state"][0][1].reshape(1, -1),
+            masks,
+            x_dim,
+            K,
         )
 
         log_true_partition_fn = jnp.log(true_partition_fn)
@@ -254,14 +267,14 @@ class DAGGFlowNet:
 
         return (params, state, logs, forward_key)
 
-    def init(self, key, optimizer, graph, mask, x_dim, K):
+    def init(self, key, optimizer, graph, values, mask, x_dim, K):
         # Set the optimizer
         self._optimizer = optax.chain(optimizer, optax.zero_nans())
 
         # Initialize the models
         key1, key2 = random.split(key, 2)
         clique_params = self.clique_model.init(key1, graph, mask, x_dim, K)
-        value_params = self.value_model.init(key2, graph, mask, x_dim, K)
+        value_params = self.value_model.init(key2, values, mask, x_dim, K)
         params = GFlowNetParameters(
             clique_model=clique_params, value_model=value_params
         )

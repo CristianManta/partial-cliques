@@ -83,6 +83,7 @@ class ReplayBuffer:
         samples = self._replay[indices]
 
         observed = [sample["observed"] for sample in samples]
+        values = [sample["values"] for sample in samples]
         mask = [sample["mask"] for sample in samples]
         next_mask = [sample["next_mask"] for sample in samples]
         gfn_state = [
@@ -91,6 +92,7 @@ class ReplayBuffer:
         ]
 
         next_observed = [sample["next_observed"] for sample in samples]
+        next_values = [sample["next_values"] for sample in samples]
         actions = [sample["actions"] for sample in samples]
         dones = [sample["done"] for sample in samples]
         var_energies = [sample["var_energies"] for sample in samples]
@@ -108,6 +110,7 @@ class ReplayBuffer:
         # Flagging the selected node for each action of the clique policy
         for i in range(batch_size):
             if actions[i][0] != -1:
+                """
                 new_nodes = graphs_tuple.values.nodes.at[
                     i * self.num_variables + actions[i][0]
                 ].set(self.num_variables + self.K + 1)
@@ -115,6 +118,8 @@ class ReplayBuffer:
                     structure=graphs_tuple.structure,
                     values=graphs_tuple.values._replace(nodes=new_nodes),
                 )
+                """
+                values[i][actions[i][0]] = self.K + 1
 
         # Convert structured array into dictionary
         # If we find that the training loop is too slow, we might want to
@@ -122,7 +127,9 @@ class ReplayBuffer:
         # of its attributes separately (ugly solution, but saves performance)
         return {
             "observed": np.stack(observed, axis=0),
+            "values": np.stack(values, axis=0),
             "next_observed": np.stack(next_observed, axis=0),
+            "next_values": np.stack(next_values, axis=0),
             "graphs_tuple": graphs_tuple,
             "next_graphs_tuple": next_graphs_tuple,
             "actions": np.stack(actions, axis=0),
@@ -202,6 +209,7 @@ class ReplayBuffer:
 
         return {
             "graph": Graph(structure=structure_graph, values=value_graph),
+            "values": np.zeros((1, self.num_variables), dtype=np.int),
             "value_energy": np.zeros((1, 1), dtype=np.float_),
             "clique_energy": np.zeros((1, 1), dtype=np.float_),
             "mask": np.zeros(

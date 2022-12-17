@@ -5,7 +5,7 @@ from copy import deepcopy
 from dag_gflownet.nets.transformer.transformers import Transformer
 
 
-def value_policy_transformer(graphs, masks, x_dim, K):
+def value_policy_transformer(values_vector, masks, x_dim, K):
     """
     Parameters
     ----------
@@ -43,12 +43,13 @@ def value_policy_transformer(graphs, masks, x_dim, K):
     batch_size, num_variables = masks.shape
     h_dim = num_variables - x_dim
     masks = masks[:, :h_dim]
-    current_sampling_feature = num_variables + K + 1
+    current_sampling_feature = K + 1
 
     transformer = Transformer(num_heads=4, num_layers=6, key_size=32, dropout_rate=0.0)
 
     # Embedding of the nodes & edges
-    node_embeddings_list = hk.Embed(num_variables + K + 2, embed_dim=128)
+    pos_embeddings_list = hk.Embed(num_variables, embed_dim=128)
+    value_embeddings_list = hk.Embed(K + 2, embed_dim=128)
     """
     + 2 because we need to reserve a special embedding for: 
     1) the (target) node with the missing value (to be sampled),     
@@ -59,15 +60,17 @@ def value_policy_transformer(graphs, masks, x_dim, K):
     # Preparing a separate copy of the embeddings for the flow estimator
     # Setting the target node feature to be the same as the unobserved ones
     flow_estimator_values_nodes = jnp.where(
-        graphs.values.nodes == current_sampling_feature,
-        num_variables + K,
-        graphs.values.nodes,
+        values_vector == current_sampling_feature,
+        K,
+        values_vector,
     )
-    flow_estimator_value_embeddings = node_embeddings_list(flow_estimator_values_nodes)
+    flow_estimator_value_embeddings = value_embeddings_list(flow_estimator_values_nodes)
 
     # Embeddings for the policy head
-    structural_embeddings = node_embeddings_list(graphs.structure.nodes)
-    value_embeddings = node_embeddings_list(graphs.values.nodes)
+    structural_embeddings = pos_embeddings_list(
+        jnp.arange(num_variables)[jnp.newaxis, ...].repeat(batch_size, axis=0)
+    )
+    value_embeddings = value_embeddings_list(values_vector)
     node_embeddings = jnp.reshape(
         structural_embeddings + value_embeddings, (batch_size, -1, 128)
     )
@@ -86,25 +89,27 @@ def value_policy_transformer(graphs, masks, x_dim, K):
     )  # Prepare for indexing with targets_ix
 
     ##############################################################
-    # This entire maneuvre is there to make sure that the 
-    # output logits corresponding to the NOT done elements in the batch 
-    # (i.e. where we still need to sample a value) are aligned with the 
+    # This entire maneuvre is there to make sure that the
+    # output logits corresponding to the NOT done elements in the batch
+    # (i.e. where we still need to sample a value) are aligned with the
     # shape of the actions
-    
-    reshaped_nodes = jnp.reshape(graphs.values.nodes, (batch_size, num_variables))
 
-    reshaped_nodes_copy = deepcopy(reshaped_nodes)
+    # reshaped_nodes = jnp.reshape(graphs.values.nodes, (batch_size, num_variables))
+
+    reshaped_nodes_copy = deepcopy(values_vector)
     dones = ~jnp.any(reshaped_nodes_copy == current_sampling_feature, axis=-1)
     dones = jnp.expand_dims(dones, axis=1)
 
     missing_piece = jnp.zeros((batch_size, num_variables - 1), dtype=bool)
     dones = jnp.concatenate((dones, missing_piece), axis=1)
 
-    reshaped_nodes_copy = jnp.where( # Filling "dones" elements of the batch with the sampling feature
-        dones, current_sampling_feature, reshaped_nodes_copy # to keep alignment
+    reshaped_nodes_copy = (
+        jnp.where(  # Filling "dones" elements of the batch with the sampling feature
+            dones, current_sampling_feature, reshaped_nodes_copy  # to keep alignment
+        )
     )
 
-    reshaped_nodes_copy = jnp.reshape( # Reshaping back to original format
+    reshaped_nodes_copy = jnp.reshape(  # Reshaping back to original format
         reshaped_nodes_copy, (batch_size * num_variables,)
     )
     ###############################################################

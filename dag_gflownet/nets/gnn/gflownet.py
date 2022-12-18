@@ -55,12 +55,12 @@ def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
     if (
         sampling_method == 2
     ):  # NOTE: This section has not been tested on batch_size != 1
-        assert batch_size == 1
+        # assert batch_size == 1
         masking_value = -1e5
         stop = jnp.full((batch_size, 1), masking_value, dtype=float)
         first_available_node_ix = jnp.where(masks, size=1)[1]
         logits = jnp.zeros((batch_size, h_dim), dtype=float)
-        logits = logits.at[0, first_available_node_ix].set(-masking_value)
+        logits = logits.at[:, first_available_node_ix].set(-masking_value)
         return log_policy_cliques(logits, stop, masks)
 
     if sampling_method == 3:

@@ -58,13 +58,13 @@ class ReplayBuffer:
             # indices[~dones] = add_idx
 
             data = {
-                "observed": observations["gfn_state"][i][0],
-                "values": observations["gfn_state"][i][1],
-                "cashed": observations["gfn_state"][i][2],
+                "observed": observations["gfn_state"][i, 0],
+                "values": observations["gfn_state"][i, 1],
+                "cashed": observations["gfn_state"][i, 2],
                 "done": np.array([next_observations["is_done"][i]]),
-                "next_observed": next_observations["gfn_state"][i][0],
-                "next_values": next_observations["gfn_state"][i][1],
-                "next_cashed": next_observations["gfn_state"][i][2],
+                "next_observed": next_observations["gfn_state"][i, 0],
+                "next_values": next_observations["gfn_state"][i, 1],
+                "next_cashed": next_observations["gfn_state"][i, 2],
                 "actions": actions[i],
                 "var_energies": np.array([var_energies[i]]),
                 "value_energies": np.array([value_energies[i]]),

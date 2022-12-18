@@ -172,6 +172,7 @@ class DAGGFlowNet:
             actions = np.array([-1, -1])
             return actions, key, logs
         """
+        '''
         for i in range(batch_size):
             """
             new_nodes = graphs.values.nodes.at[i * self.N + clique_actions[i]].set(
@@ -183,12 +184,13 @@ class DAGGFlowNet:
             )
             """
             observations["gfn_state"][i][1][clique_actions[i]] = K + 1
-
+        '''
+        observations["gfn_state"][jnp.arange(batch_size), 1, clique_actions] = K + 1
         # use the value GFN to sample a value for the variable we just observed
         logits_value, log_flow = self.value_model.apply(
             params.value_model,
             forward_key,
-            observations["gfn_state"][0][1].reshape(1, -1),
+            observations["gfn_state"][:, 1],
             masks,
             x_dim,
             K,
@@ -200,11 +202,14 @@ class DAGGFlowNet:
 
         actions = jnp.stack([clique_actions, sampled_value], axis=-1)
         actions = jnp.where(
-            clique_actions == self.h_dim, -jnp.ones_like(actions), actions
+            clique_actions[..., jnp.newaxis] == self.h_dim,
+            -jnp.ones_like(actions),
+            actions,
         )
         logs = {
             "is_exploration": None,
             "logpf": logpf,
+            "logz": log_flow,
         }
         return (actions, key, logs)
 
@@ -227,9 +232,12 @@ class DAGGFlowNet:
         log_p_hat = log_flow - log_true_partition_fn
         return log_p_hat, forward_key
 
-    def compute_reverse_kl(self, full_observations, full_cliques, traj_pf, ugm_model):
+    def compute_reverse_kl(
+        self, full_observations, full_cliques, traj_pf, log_marginal, ugm_model
+    ):
         # compute the reverse KL(GFN || GT)
         assert full_observations.shape[0] == traj_pf.shape[0]
+        assert full_observations.shape[0] == log_marginal.shape[0]
         factors = ugm_model.get_factors()
         # for every sample, compute the likelihood under the ugm_model
         kl_terms = []
@@ -247,11 +255,8 @@ class DAGGFlowNet:
                     ]
                 )
             # store the KL term
-            kl_terms.append(
-                traj_pf[i]
-                - total_log_potential
-                + np.log(ugm_model.get_partition_function())
-            )
+            kl_terms.append(traj_pf[i] + log_marginal - total_log_potential)
+            # + np.log(ugm_model.get_partition_function())
         return jnp.mean(jnp.array(kl_terms))
 
     @partial(jit, static_argnums=(0, 4, 5))

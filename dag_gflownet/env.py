@@ -57,35 +57,33 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         action_space = Discrete(self.num_variables * self.K)
         super().__init__(num_envs, observation_space, action_space)
 
-    def reset(self):
-        observed = np.zeros(self.num_variables, dtype=int)
-        observed[self.h_dim :] = 1
-        values = np.array([self.K] * self.num_variables)
-        values[self.h_dim :] = self.data[
-            np.random.randint(self.data.shape[0]),  # FIXME: Replace with rng
+    def reset(self, bsz=1):
+        observed = np.zeros((bsz, self.num_variables), dtype=int)
+        observed[:, self.h_dim :] = 1
+        # values = np.array([self.K] * self.num_variables)
+        values = np.ones((bsz, self.num_variables), dtype=int) * self.K
+        values[:, self.h_dim :] = self.data[
+            np.random.permutation(self.data.shape[0])[:bsz],  # FIXME: Replace with rng
             self.h_dim :,
         ]
-        gfn_state = (
-            observed,
-            values,
-            np.ones(self.num_variables, dtype=int),
+        gfn_state = np.stack(
+            [observed, values, np.ones((bsz, self.num_variables), dtype=int)], axis=1
         )
         # mark x as cashed
-        gfn_state[2][self.h_dim :] = 0
+        gfn_state[:, 2, self.h_dim :] = 0
         self._state = {
-            "gfn_state": [gfn_state],
-            "mask": np.ones(shape=(1, self.num_variables), dtype=int),
-            "unobserved_cliques": [deepcopy(self.full_cliques)],
-            "is_done": [False],
+            "gfn_state": gfn_state,
+            "mask": np.ones(shape=(bsz, self.num_variables), dtype=int),
+            "unobserved_cliques": [deepcopy(self.full_cliques) for _ in range(bsz)],
+            "is_done": np.zeros(bsz, dtype=bool),
         }
         # mark x as observed and not eligible for sampling
-        self._state["mask"][0, self.h_dim :] = 0
+        self._state["mask"][:, self.h_dim :] = 0
         return deepcopy(self._state)
 
     def step(self, actions):
         # we use the convention that if actions[0][0] == -1, we terminate
         assert len(actions.shape) == 2
-        assert actions.shape[0] == 1
         assert actions.shape[1] == 2
 
         var_energies = []
@@ -101,18 +99,18 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         )
         for i in range(bsz):
             assert np.all(
-                (self._state["gfn_state"][i][0][obs_var] == 0)[
+                (self._state["gfn_state"][i, 0, obs_var] == 0)[
                     actions[i, 0] != -1
                 ]  # FIXME: There was an assertion error here when running x_dim=4, h_dim=6
             )
             if actions[i, 0] == -1:
                 continue
-            self._state["gfn_state"][i][0][obs_var] = 1
-            self._state["gfn_state"][i][1][obs_var] = obs_value
+            self._state["gfn_state"][i, 0, obs_var] = 1
+            self._state["gfn_state"][i, 1, obs_var] = obs_value
         var_energy = 0.0  # TODO
 
         for i in range(bsz):
-            if obs_var == -1:
+            if obs_var[i] == -1:
                 self._state["is_done"][i] = True
                 var_energies.append(0.0)
                 (
@@ -151,6 +149,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
                     self._state["gfn_state"][i],
                     self._state["unobserved_cliques"][i],
                     self.K,
+                    self.h_dim,
                 )
             )
             var_energies.append(var_energy)

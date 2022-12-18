@@ -193,7 +193,9 @@ def get_str_rep(nodes, model):
     return set([sorted(all_nodes)[n] for n in nodes])
 
 
-def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int):
+def get_clique_selection_mask(
+    gfn_state: tuple, unobserved_cliques: list, K: int, h_dim: int
+):
     """
     Given a GFN state and a mutable representation of unfinished cliques,
     return a mask of eligible variables for the clique selection policy.
@@ -239,10 +241,11 @@ def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int
     eligible_vars = set().union(*eligible_cliques) - set(active_vars)
 
     mask = np.zeros(N)
+    eligible_vars = list(filter(lambda x: x < h_dim, eligible_vars))
     if len(eligible_vars) == 0 or len(active_vars) == 0:
         mask = 1 - gfn_state[0]
     else:
-        mask[np.array(list(eligible_vars))] = 1
+        mask[np.array(eligible_vars)] = 1
     return mask
 
 

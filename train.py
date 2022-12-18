@@ -133,7 +133,9 @@ def main(args):
     )
 
     # Training loop
-    observations = env.reset()  # For the training code (this will get updated)
+    observations = env.reset(
+        bsz=args.batch_size
+    )  # For the training code (this will get updated)
     init_eval_observation = eval_env.reset()  # For the evaluation code
     init_eval_observation["graphs_tuple"] = to_graphs_tuple(
         full_cliques, init_eval_observation["gfn_state"], args.K, args.x_dim
@@ -174,8 +176,8 @@ def main(args):
                 dones,
             )
 
-            if dones[0][0]:
-                observations = env.reset()
+            if np.any(dones):
+                observations = env.reset(bsz=args.batch_size)
             else:
                 observations = next_observations
 
@@ -229,13 +231,16 @@ def main(args):
                     MLL=f"{log_p_hat_x_eval[0]:.2f}",
                 )
 
-                if (train_steps + 1) % args.evaluate_every == 0:
+                if (train_steps) % args.evaluate_every == 0:
                     # evaluete the GFN by sampling complete trajectories
                     eval_full_trajectories = []
                     eval_logpf = []
+                    eval_logz = []
+                    eval_log_marginal = []
                     eval_obs = eval_env.reset()
                     for _ in range(100):
                         logpf = 0.0
+                        logz = 0.0
                         eval_obs["graphs_tuple"] = to_graphs_tuple(
                             full_cliques, eval_obs["gfn_state"], args.K, args.x_dim
                         )
@@ -250,10 +255,24 @@ def main(args):
                         )
                         eval_obs, energies, dones = eval_env.step(actions)
                         logpf += logs["logpf"]
+                        logz += logs["logz"]
 
                         if dones[0][0]:
                             eval_full_trajectories.append(eval_obs["gfn_state"][0][1])
                             eval_logpf.append(logpf)
+                            eval_logz.append(logz)
+                            eval_log_marginal.append(
+                                np.log(
+                                    x_factors_values[
+                                        tuple(
+                                            [
+                                                eval_obs["gfn_state"][0][1][i]
+                                                for i in range(args.x_dim)
+                                            ]
+                                        )
+                                    ]
+                                )
+                            )
                             eval_obs = eval_env.reset()
                             logpf = 0.0
                     # calculate and print reverse KL
@@ -261,6 +280,7 @@ def main(args):
                         full_observations=jnp.stack(eval_full_trajectories, axis=0),
                         full_cliques=full_cliques,
                         traj_pf=jnp.array(eval_logpf),
+                        log_marginal=jnp.array(eval_log_marginal),
                         ugm_model=true_ugm,
                     )
                     print(f"Reverse KL: {reverse_kl}")

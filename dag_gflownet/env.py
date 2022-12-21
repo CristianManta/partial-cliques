@@ -151,7 +151,13 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
                     self._state["gfn_state"][i],
                     self._state["unobserved_cliques"][i],
                     self.K,
+                    self.h_dim,
                 )
+            )
+            assert np.all(
+                (
+                    1 - self._state["gfn_state"][i][0][self._state["mask"][i] == 1]
+                )  # FIXME: There was an assertion error here when running x_dim=4, h_dim=6
             )
             var_energies.append(var_energy)
             value_energies.append(value_energy)

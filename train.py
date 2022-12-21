@@ -122,7 +122,7 @@ def main(args):
         dropout_rate=args.dropout_rate,
     )
     # optimizer = optax.adam(args.lr)
-    optimizer = optax.sgd(0.01)
+    optimizer = optax.sgd(args.lr)
     params, state = gflownet.init(
         subkey,
         optimizer,

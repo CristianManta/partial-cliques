@@ -5,7 +5,17 @@ from copy import deepcopy
 from dag_gflownet.nets.transformer.transformers import Transformer
 
 
-def value_policy_transformer(values_vector, masks, x_dim, K):
+def value_policy_transformer(
+    values_vector,
+    masks,
+    x_dim,
+    K,
+    embed_dim,
+    num_heads,
+    num_layers,
+    key_size,
+    dropout_rate,
+):
     """
     Parameters
     ----------
@@ -45,11 +55,16 @@ def value_policy_transformer(values_vector, masks, x_dim, K):
     masks = masks[:, :h_dim]
     current_sampling_feature = K + 1
 
-    transformer = Transformer(num_heads=4, num_layers=6, key_size=32, dropout_rate=0.0)
+    transformer = Transformer(
+        num_heads=num_heads,
+        num_layers=num_layers,
+        key_size=key_size,
+        dropout_rate=dropout_rate,
+    )
 
     # Embedding of the nodes & edges
-    pos_embeddings_list = hk.Embed(num_variables, embed_dim=128)
-    value_embeddings_list = hk.Embed(K + 2, embed_dim=128)
+    pos_embeddings_list = hk.Embed(num_variables, embed_dim=embed_dim)
+    value_embeddings_list = hk.Embed(K + 2, embed_dim=embed_dim)
     """
     + 2 because we need to reserve a special embedding for: 
     1) the (target) node with the missing value (to be sampled),     
@@ -72,18 +87,19 @@ def value_policy_transformer(values_vector, masks, x_dim, K):
     )
     value_embeddings = value_embeddings_list(values_vector)
     node_embeddings = jnp.reshape(
-        structural_embeddings + value_embeddings, (batch_size, -1, 128)
+        structural_embeddings + value_embeddings, (batch_size, -1, embed_dim)
     )
 
     # embeddings for the flow estimator
     flow_estimator_node_embeddings = jnp.reshape(
-        structural_embeddings + flow_estimator_value_embeddings, (batch_size, -1, 128)
+        structural_embeddings + flow_estimator_value_embeddings,
+        (batch_size, -1, embed_dim),
     )
 
     node_features = transformer(node_embeddings)
     flow_estimator_node_features = transformer(flow_estimator_node_embeddings)
 
-    all_logits = hk.nets.MLP([128, K], name="logit")(node_features)
+    all_logits = hk.nets.MLP([embed_dim, K], name="logit")(node_features)
     all_logits = jnp.reshape(
         all_logits, (batch_size * num_variables, -1)
     )  # Prepare for indexing with targets_ix
@@ -126,10 +142,10 @@ def value_policy_transformer(values_vector, masks, x_dim, K):
 
     # OUTPUT: Computing log_flows
     flow_estimator_node_features = jnp.reshape(
-        flow_estimator_node_features, (batch_size, num_variables * 128)
+        flow_estimator_node_features, (batch_size, num_variables * embed_dim)
     )
 
-    log_flows = hk.nets.MLP([num_variables * 128, 1], name="log_flows")(
+    log_flows = hk.nets.MLP([num_variables * embed_dim, 1], name="log_flows")(
         flow_estimator_node_features
     )
     log_flows = jnp.squeeze(log_flows, axis=1)

@@ -38,7 +38,17 @@ class DAGGFlowNet:
         loss (in place of the L2 loss) to avoid gradient explosion.
     """
 
-    def __init__(self, x_dim, h_dim, delta=1.0):
+    def __init__(
+        self,
+        x_dim,
+        h_dim,
+        delta=1.0,
+        embed_dim=128,
+        num_heads=4,
+        num_layers=6,
+        key_size=32,
+        dropout_rate=0.0,
+    ):
 
         clique_model = clique_policy
         value_model = value_policy_transformer
@@ -51,6 +61,12 @@ class DAGGFlowNet:
         self.N = x_dim + h_dim
 
         self._optimizer = None
+
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.num_layers = num_layers
+        self.key_size = key_size
+        self.dropout_rate = dropout_rate
 
     def loss(
         self, params, samples, x_dim, K, forward_key
@@ -80,6 +96,11 @@ class DAGGFlowNet:
             samples["mask"],
             x_dim,
             K,
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            num_layers=self.num_layers,
+            key_size=self.key_size,
+            dropout_rate=self.dropout_rate,
         )
 
         log_pf = nn.log_softmax(logits_value)[jnp.arange(bsz), samples["actions"][:, 1]]
@@ -112,6 +133,11 @@ class DAGGFlowNet:
             samples["next_mask"],
             x_dim,
             K,
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            num_layers=self.num_layers,
+            key_size=self.key_size,
+            dropout_rate=self.dropout_rate,
         )
 
         value_energies = samples["value_energies"]
@@ -192,6 +218,11 @@ class DAGGFlowNet:
             masks,
             x_dim,
             K,
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            num_layers=self.num_layers,
+            key_size=self.key_size,
+            dropout_rate=self.dropout_rate,
         )
 
         sampled_value = jax.random.categorical(subkey1, logits_value / temperature)
@@ -221,6 +252,11 @@ class DAGGFlowNet:
             masks,
             x_dim,
             K,
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            num_layers=self.num_layers,
+            key_size=self.key_size,
+            dropout_rate=self.dropout_rate,
         )
 
         log_true_partition_fn = jnp.log(true_partition_fn)
@@ -274,7 +310,18 @@ class DAGGFlowNet:
         # Initialize the models
         key1, key2 = random.split(key, 2)
         clique_params = self.clique_model.init(key1, graph, mask, x_dim, K)
-        value_params = self.value_model.init(key2, values, mask, x_dim, K)
+        value_params = self.value_model.init(
+            key2,
+            values,
+            mask,
+            x_dim,
+            K,
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            num_layers=self.num_layers,
+            key_size=self.key_size,
+            dropout_rate=self.dropout_rate,
+        )
         params = GFlowNetParameters(
             clique_model=clique_params, value_model=value_params
         )

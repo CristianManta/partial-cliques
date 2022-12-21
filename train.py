@@ -111,9 +111,18 @@ def main(args):
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(delta=args.delta, x_dim=args.x_dim, h_dim=args.h_dim)
+    gflownet = DAGGFlowNet(
+        delta=args.delta,
+        x_dim=args.x_dim,
+        h_dim=args.h_dim,
+        embed_dim=args.embed_dim,
+        num_heads=args.num_heads,
+        num_layers=args.num_layers,
+        key_size=args.key_size,
+        dropout_rate=args.dropout_rate,
+    )
     # optimizer = optax.adam(args.lr)
-    optimizer = optax.sgd(0.01)
+    optimizer = optax.sgd(args.lr)
     params, state = gflownet.init(
         subkey,
         optimizer,
@@ -464,6 +473,35 @@ if __name__ == "__main__":
         type=int,
         required=True,
         help="The number of discrete values that the variables can take?",
+    )
+
+    transformer_args = parser.add_argument_group("Transformer")
+    transformer_args.add_argument(
+        "--embed_dim",
+        type=int,
+        default=128,
+        help="Number of dimensions of the embeddings sent to the transformer as input",
+    )
+    transformer_args.add_argument(
+        "--num_heads",
+        type=int,
+        default=4,
+        help="Number of attention heads for the transformer",
+    )
+    transformer_args.add_argument(
+        "--num_layers",
+        type=int,
+        default=6,
+        help="Number of layers for the transformer",
+    )
+    transformer_args.add_argument(
+        "--key_size",
+        type=int,
+        default=32,
+        help="Dimension of the key for the multi head attention mechanism",
+    )
+    transformer_args.add_argument(
+        "--dropout_rate", type=float, default=0.0, help="Dropout rate."
     )
 
     args = parser.parse_args()

@@ -34,7 +34,7 @@ do
             echo "#SBATCH -o /home/mila/c/cristian-dragos.manta/projects/partial-cliques/slurm-%j.out" >> temprun.sh
 
             echo "module load cuda/11.1/cudnn/8.1" >> temprun.sh
-            echo "conda init bash" >> temprun.sh
+            echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> temprun.sh
             echo "conda activate dag-gfn" >> temprun.sh
             echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
 

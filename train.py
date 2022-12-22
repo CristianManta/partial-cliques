@@ -121,8 +121,13 @@ def main(args):
         key_size=args.key_size,
         dropout_rate=args.dropout_rate,
     )
-    # optimizer = optax.adam(args.lr)
-    optimizer = optax.sgd(args.lr)
+    if args.optimizer == "adam":
+        optimizer = optax.adam(args.lr)
+    elif args.optimizer == "sgd":
+        optimizer = optax.sgd(args.lr)
+    else:
+        raise ValueError("Optimizer name is invalid.")
+
     params, state = gflownet.init(
         subkey,
         optimizer,
@@ -383,6 +388,13 @@ if __name__ == "__main__":
         type=int,
         default=100_000,
         help="Number of iterations (default: %(default)s)",
+    )
+
+    optimization.add_argument(
+        "--optimizer",
+        type=str,
+        default="sgd",
+        help="optimizer name. Choices: sgd or adam (default: %(default)s)",
     )
 
     # Replay buffer

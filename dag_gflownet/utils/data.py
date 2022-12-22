@@ -71,7 +71,7 @@ def get_data(name, args, rng=default_rng()):
             n=args.num_samples,
             m=args.num_eval_samples,
             rng=rng,
-            latent_structure=args.latent_structure
+            latent_structure=args.latent_structure,
         )
         graph = (graph, cliques, factors)
         score = None
@@ -85,6 +85,7 @@ def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
     if latent_structure == "random":
         latent_nodes = ["h" + str(i) for i in range(d)]
     elif latent_structure == "G1":
+        assert D == 3
         latent_nodes = ["h" + str(i) for i in range(6)]
     else:
         raise ValueError(f"Undefined latent structure: {latent_structure}")

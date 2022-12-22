@@ -95,9 +95,9 @@
                 "--num_samples",
                 "2",
                 "--x_dim",
-                "3",
+                "8",
                 "--h_dim",
-                "6",
+                "4",
                 "--K",
                 "2",
                 "--seed",
@@ -109,7 +109,7 @@
                 "--run_number",
                 "1",
                 "--latent_structure",
-                "G1"
+                "random"
             ]
         }
     ]

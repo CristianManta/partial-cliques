@@ -231,6 +231,7 @@ def main(args):
                                 "step": train_steps,
                                 "loss": logs["loss"],
                                 "log_p_hat_x_eval": log_p_hat_x_eval[0],
+                                "log_p_x_eval": log_p_x_eval.mean(),
                                 "replay/size": len(replay),
                                 "epsilon": epsilon,
                                 "error/mean": jnp.abs(logs["error"]).mean(),

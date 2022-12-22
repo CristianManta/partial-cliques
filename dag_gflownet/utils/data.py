@@ -71,7 +71,7 @@ def get_data(name, args, rng=default_rng()):
             n=args.num_samples,
             m=args.num_eval_samples,
             rng=rng,
-            latent_structure="random",
+            latent_structure=args.latent_structure
         )
         graph = (graph, cliques, factors)
         score = None
@@ -134,10 +134,12 @@ def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
     if latent_structure == "random":
         potential_fns = [rng.random(2 ** (len(list(clique)))) for clique in cliques]
     elif latent_structure == "G1":
-        potential_fns = [0.01*np.ones((2 ** (len(list(clique))))) for clique in cliques]
-        potential_fns[0][0] = 2 # x0=0, x1=0, x2=0 -> h0=0, h1=0, h2=0
+        potential_fns = [
+            0.01 * np.ones((2 ** (len(list(clique))))) for clique in cliques
+        ]
+        potential_fns[0][0] = 2  # x0=0, x1=0, x2=0 -> h0=0, h1=0, h2=0
         potential_fns[1][-1] = 2  # x0=1, x1=1, x2=1 -> h2=1, h3=1
-        potential_fns[2][2**D+1] = 2   # x0=0, x1=0, x2=1 -> h3=0, h4=0, h5=1
+        potential_fns[2][2**D + 1] = 2  # x0=0, x1=0, x2=1 -> h3=0, h4=0, h5=1
     else:
         raise ValueError(f"Undefined latent structure: {latent_structure}")
 
@@ -222,6 +224,7 @@ def get_index_rep(nodes, model):
     index = set([sorted(all_nodes).index(n) for n in nodes])
     nodes = [all_nodes[i] for i in list(index)]
     return index, nodes
+
 
 def get_str_rep(nodes, model):
     all_nodes = [n for n in model.nodes]

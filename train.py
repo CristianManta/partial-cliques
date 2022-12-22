@@ -475,6 +475,13 @@ if __name__ == "__main__":
         help="The number of discrete values that the variables can take?",
     )
 
+    graph_args.add_argument(
+        "--latent_structure",
+        type=str,
+        default="random",
+        help="type of graph. For now, choices are G1 or random (default: %(default)s)",
+    )
+
     transformer_args = parser.add_argument_group("Transformer")
     transformer_args.add_argument(
         "--embed_dim",

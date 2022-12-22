@@ -71,7 +71,7 @@ def get_data(name, args, rng=default_rng()):
             n=args.num_samples,
             m=args.num_eval_samples,
             rng=rng,
-            latent_structure="G1",
+            latent_structure="random",
         )
         graph = (graph, cliques, factors)
         score = None
@@ -127,13 +127,17 @@ def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
 
     model.add_edges_from(edges)
     cliques = list(map(set, nx.find_cliques(model.triangulate())))
+    # we cover all variables in a clique, i.e., both x and h
+    cliques_indexes = [get_index_rep(clique, model)[0] for clique in cliques]
+    cliques = [get_index_rep(clique, model)[1] for clique in cliques]
+
     if latent_structure == "random":
         potential_fns = [rng.random(2 ** (len(list(clique)))) for clique in cliques]
     elif latent_structure == "G1":
-        potential_fns = [rng.random(2 ** (len(list(clique)))) for clique in cliques]
-        for clique_idx, clique in enumerate(cliques):
-            potential_fns[clique_idx][0] = 2
-            potential_fns[clique_idx][-1] = 2
+        potential_fns = [0.01*np.ones((2 ** (len(list(clique))))) for clique in cliques]
+        potential_fns[0][0] = 2 # x0=0, x1=0, x2=0 -> h0=0, h1=0, h2=0
+        potential_fns[1][-1] = 2  # x0=1, x1=1, x2=1 -> h2=1, h3=1
+        potential_fns[2][2**D+1] = 2   # x0=0, x1=0, x2=1 -> h3=0, h4=0, h5=1
     else:
         raise ValueError(f"Undefined latent structure: {latent_structure}")
 
@@ -146,15 +150,12 @@ def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
         for clique_idx, clique in enumerate(cliques)
     ]
 
-    # we cover all variables in a clique, i.e., both x and h
-    cliques = [get_index_rep(clique, model) for clique in cliques]
-
     model.add_factors(*factors_list)
     gibbs = GibbsSampling(model)
     train_data = gibbs.sample(size=n)
     eval_data = gibbs.sample(size=m)
 
-    return model, (cliques, factors_list), (train_data, eval_data)
+    return model, (cliques_indexes, factors_list), (train_data, eval_data)
 
 
 def get_potential_fns(model: MarkovNetwork, unobserved_cliques: list):
@@ -218,8 +219,9 @@ def get_energy_fns(model: MarkovNetwork, full_cliques: list):
 
 def get_index_rep(nodes, model):
     all_nodes = [n for n in model.nodes]
-    return set([sorted(all_nodes).index(n) for n in nodes])
-
+    index = set([sorted(all_nodes).index(n) for n in nodes])
+    nodes = [all_nodes[i] for i in list(index)]
+    return index, nodes
 
 def get_str_rep(nodes, model):
     all_nodes = [n for n in model.nodes]

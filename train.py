@@ -167,6 +167,7 @@ def main(args):
     steps = []
     losses = []
     log_likelihoods_hat = []
+    reverse_kls = []
 
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
@@ -297,6 +298,7 @@ def main(args):
                         ugm_model=true_ugm,
                     )
                     print(f"Reverse KL: {reverse_kl}")
+                    reverse_kls.append(reverse_kl.item())
                     if not args.off_wandb:
                         wandb.log(
                             {
@@ -311,9 +313,11 @@ def main(args):
     steps = np.array(steps)
     losses = np.array(losses)
     log_likelihoods_hat = np.array(log_likelihoods_hat)
-    np.save("steps", steps)
-    np.save("losses", losses)
-    np.save("log_likelihoods_hat", log_likelihoods_hat)
+    np.save(f"steps_{args.run_number}", steps)
+    np.save(f"losses_{args.run_number}", losses)
+    np.save(f"log_likelihoods_hat_{args.run_number}", log_likelihoods_hat)
+    np.save(f"log_p_x_eval_{args.run_number}", np.array(log_p_x_eval.mean()))
+    np.save(f"reverse_kls_{args.run_number}", np.array(reverse_kls))
     # Sample from the learned policy
     # TODO:
     # learned_graphs = sample_from(

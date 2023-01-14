@@ -66,7 +66,12 @@ def get_data(name, args, rng=default_rng()):
 
     elif name == "random_latent_graph":
         graph, (cliques, factors), data = get_random_graph(
-            d=args.h_dim, D=args.x_dim, n=args.num_samples, m=args.num_eval_samples, rng=rng
+            d=args.h_dim,
+            D=args.x_dim,
+            n=args.num_samples,
+            m=args.num_eval_samples,
+            rng=rng,
+            latent_structure=args.latent_structure,
         )
         graph = (graph, cliques, factors)
         score = None
@@ -76,18 +81,41 @@ def get_data(name, args, rng=default_rng()):
     return graph, data, score
 
 
-def get_random_graph(d, D, n, m, rng=default_rng()):
-    latent_nodes = ["h" + str(i) for i in range(d)]
+def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
+    if latent_structure == "random":
+        latent_nodes = ["h" + str(i) for i in range(d)]
+    elif latent_structure == "G1":
+        assert D == 3
+        latent_nodes = ["h" + str(i) for i in range(6)]
+    else:
+        raise ValueError(f"Undefined latent structure: {latent_structure}")
+
     obs_nodes = ["x" + str(i) for i in range(D)]
-    # Random Graph
-    edges = []
-    is_edge_list = rng.binomial(1, 0.6, d**2)
     model = MarkovNetwork()
     model.add_nodes_from(latent_nodes + obs_nodes)
-    for e0_idx in range(d):
-        for e1_idx in range(d):
-            if is_edge_list[e0_idx * d + e1_idx] and e0_idx != e1_idx:
-                edges.append((latent_nodes[e0_idx], latent_nodes[e1_idx]))
+
+    if latent_structure == "random":
+        # Random Graph
+        edges = []
+        is_edge_list = rng.binomial(1, 0.6, d**2)
+
+        for e0_idx in range(d):
+            for e1_idx in range(d):
+                if is_edge_list[e0_idx * d + e1_idx] and e0_idx != e1_idx:
+                    edges.append((latent_nodes[e0_idx], latent_nodes[e1_idx]))
+
+    elif latent_structure == "G1":
+        edges = [
+            ("h0", "h1"),
+            ("h0", "h2"),
+            ("h1", "h2"),
+            ("h2", "h3"),
+            ("h3", "h4"),
+            ("h3", "h5"),
+            ("h4", "h5"),
+        ]
+    else:
+        raise ValueError(f"Undefined latent structure: {latent_structure}")
 
     # Adding edges between latent_nodes and obs_nodes
     for l in latent_nodes:
@@ -100,24 +128,37 @@ def get_random_graph(d, D, n, m, rng=default_rng()):
 
     model.add_edges_from(edges)
     cliques = list(map(set, nx.find_cliques(model.triangulate())))
+    # we cover all variables in a clique, i.e., both x and h
+    cliques_indexes = [get_index_rep(clique, model)[0] for clique in cliques]
+    cliques = [get_index_rep(clique, model)[1] for clique in cliques]
+
+    if latent_structure == "random":
+        potential_fns = [rng.random(2 ** (len(list(clique)))) for clique in cliques]
+    elif latent_structure == "G1":
+        potential_fns = [
+            0.01 * np.ones((2 ** (len(list(clique))))) for clique in cliques
+        ]
+        potential_fns[0][0] = 2  # x0=0, x1=0, x2=0 -> h0=0, h1=0, h2=0
+        potential_fns[1][-1] = 2  # x0=1, x1=1, x2=1 -> h2=1, h3=1
+        potential_fns[2][2**D + 1] = 2  # x0=0, x1=0, x2=1 -> h3=0, h4=0, h5=1
+    else:
+        raise ValueError(f"Undefined latent structure: {latent_structure}")
+
     factors_list = [
         DiscreteFactor(
             list(clique),
             [2] * len(list(clique)),
-            rng.random(2 ** (len(list(clique)))),
+            potential_fns[clique_idx],
         )
-        for clique in cliques
+        for clique_idx, clique in enumerate(cliques)
     ]
-
-    # we cover all variables in a clique, i.e., both x and h
-    cliques = [get_index_rep(clique, model) for clique in cliques]
 
     model.add_factors(*factors_list)
     gibbs = GibbsSampling(model)
     train_data = gibbs.sample(size=n)
     eval_data = gibbs.sample(size=m)
 
-    return model, (cliques, factors_list), (train_data, eval_data)
+    return model, (cliques_indexes, factors_list), (train_data, eval_data)
 
 
 def get_potential_fns(model: MarkovNetwork, unobserved_cliques: list):
@@ -181,7 +222,9 @@ def get_energy_fns(model: MarkovNetwork, full_cliques: list):
 
 def get_index_rep(nodes, model):
     all_nodes = [n for n in model.nodes]
-    return set([sorted(all_nodes).index(n) for n in nodes])
+    index = set([sorted(all_nodes).index(n) for n in nodes])
+    nodes = [all_nodes[i] for i in list(index)]
+    return index, nodes
 
 
 def get_str_rep(nodes, model):
@@ -189,7 +232,9 @@ def get_str_rep(nodes, model):
     return set([sorted(all_nodes)[n] for n in nodes])
 
 
-def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int):
+def get_clique_selection_mask(
+    gfn_state: tuple, unobserved_cliques: list, K: int, h_dim: int
+):
     """
     Given a GFN state and a mutable representation of unfinished cliques,
     return a mask of eligible variables for the clique selection policy.
@@ -229,12 +274,16 @@ def get_clique_selection_mask(gfn_state: tuple, unobserved_cliques: list, K: int
 
     N = len(gfn_state[0])
     active_vars = set(np.nonzero(gfn_state[2] & gfn_state[0])[0].flatten())
+    observed_vars = set(np.nonzero(gfn_state[0])[0].flatten())
     eligible_cliques = list(
         filter(lambda c: c.issuperset(active_vars), unobserved_cliques)
     )
-    eligible_vars = set().union(*eligible_cliques) - set(active_vars)
+    eligible_vars = (
+        set().union(*eligible_cliques) - set(active_vars) - set(observed_vars)
+    )
 
     mask = np.zeros(N)
+    eligible_vars = list(filter(lambda x: x < h_dim, eligible_vars))
     if len(eligible_vars) == 0 or len(active_vars) == 0:
         mask = 1 - gfn_state[0]
     else:

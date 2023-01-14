@@ -17,14 +17,14 @@ def to_graphs_tuple(
     We use the following conversion table to decide the .node attribute
     from each output (structure_graph or value_graph) GraphsTuple:
 
-        0, 1, ..., N-1 -> identifies the observed nodes in the structure_graph
+        0, 1, ..., N-1 -> identifies the nodes indices in the structure_graph
             (corresponds to their original indices).
 
         N, N+1, ..., N+K-1 -> identifies the values of the observed nodes
             in the value_graph, where N+i means value i.
 
-        N+K -> identifies unobserved nodes in both the structure_graph
-        and in the value_graph. These are the dummy indices.
+        N+K -> identifies unobserved nodes in
+        the value_graph. These are the dummy indices.
 
         N+K+1 -> identifies the *unique* node whose value needs to be
         sampled by the value policy. This is only part of the value_graph and
@@ -73,9 +73,9 @@ def to_graphs_tuple(
         num_variables = gfn_state[0].shape[0]
         h_dim = num_variables - x_dim
         structure_node_features = np.arange(num_variables)
-        structure_node_features = np.where(
-            gfn_state[0] == 0, num_variables + K, structure_node_features
-        )
+        # structure_node_features = np.where(
+        #    gfn_state[0] == 0, num_variables + K, structure_node_features
+        # )
 
         edges = []
 

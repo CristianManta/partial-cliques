@@ -6,6 +6,7 @@ import pickle
 import jax
 import wandb
 import os
+import matplotlib.pyplot as plt
 
 from tqdm import trange
 from numpy.random import default_rng
@@ -110,12 +111,28 @@ def main(args):
     )
 
     # Create the GFlowNet & initialize parameters
-    gflownet = DAGGFlowNet(delta=args.delta, x_dim=args.x_dim, h_dim=args.h_dim)
-    optimizer = optax.adam(args.lr)
+    gflownet = DAGGFlowNet(
+        delta=args.delta,
+        x_dim=args.x_dim,
+        h_dim=args.h_dim,
+        embed_dim=args.embed_dim,
+        num_heads=args.num_heads,
+        num_layers=args.num_layers,
+        key_size=args.key_size,
+        dropout_rate=args.dropout_rate,
+    )
+    if args.optimizer == "adam":
+        optimizer = optax.adam(args.lr)
+    elif args.optimizer == "sgd":
+        optimizer = optax.sgd(args.lr)
+    else:
+        raise ValueError("Optimizer name is invalid.")
+
     params, state = gflownet.init(
         subkey,
         optimizer,
         replay.dummy["graph"],
+        replay.dummy["values"],
         replay.dummy["mask"],
         args.x_dim,
         args.K,
@@ -136,6 +153,22 @@ def main(args):
         full_cliques, init_eval_observation["gfn_state"], args.K, args.x_dim
     )
 
+    # Plotting
+    figure, axis = plt.subplots(2, figsize=(15, 15))
+    plt.subplots_adjust(hspace=1)
+    axis[0].set_title("Value Policy Loss")
+    axis[0].set(xlabel="Training Step")
+    axis[0].set(ylabel="Loss")
+    axis[1].set_title("Log Likelihood Lower Bound")
+    axis[1].set(xlabel="Training Step")
+    axis[1].set(ylabel="Log Probability Estimate")
+    axis[1].axhline(log_p_x_eval.mean(), color="r", label=r"$\log p(x)$")
+
+    steps = []
+    losses = []
+    log_likelihoods_hat = []
+    reverse_kls = []
+
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
@@ -144,7 +177,7 @@ def main(args):
                 full_cliques, observations["gfn_state"], args.K, args.x_dim
             )
             actions, key, logs = gflownet.act(
-                params, key, observations, epsilon, args.x_dim, args.K
+                params, key, observations, epsilon, args.x_dim, args.K, temperature=2.0
             )  # TODO:
             next_observations, energies, dones = env.step(actions)
             replay.add(  # TODO:
@@ -164,16 +197,25 @@ def main(args):
             if iteration >= args.prefill:
                 # Update the parameters of the GFlowNet
                 samples = replay.sample(batch_size=args.batch_size, rng=rng)
-                params, state, logs = gflownet.step(
-                    params, state, samples, args.x_dim, args.K
+                params, state, logs, key = gflownet.step(
+                    params, state, samples, args.x_dim, args.K, key
                 )
 
                 # Evaluation: compute log p(x_eval)
-                log_p_hat_x_eval = gflownet.compute_data_log_likelihood(
-                    params, init_eval_observation, args.x_dim, args.K, true_partition_fn
+                log_p_hat_x_eval, key = gflownet.compute_data_log_likelihood(
+                    params,
+                    init_eval_observation,
+                    args.x_dim,
+                    args.K,
+                    true_partition_fn,
+                    key,
                 )
 
                 train_steps = iteration - args.prefill
+                if (train_steps + 1) % args.log_every == 0:
+                    steps.append(train_steps)
+                    losses.append(logs["loss"])
+                    log_likelihoods_hat.append(log_p_hat_x_eval[0])
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
                         wandb.log(
@@ -190,6 +232,7 @@ def main(args):
                                 "step": train_steps,
                                 "loss": logs["loss"],
                                 "log_p_hat_x_eval": log_p_hat_x_eval[0],
+                                "log_p_x_eval": log_p_x_eval.mean(),
                                 "replay/size": len(replay),
                                 "epsilon": epsilon,
                                 "error/mean": jnp.abs(logs["error"]).mean(),
@@ -202,6 +245,79 @@ def main(args):
                     MLL=f"{log_p_hat_x_eval[0]:.2f}",
                 )
 
+                if (train_steps) % args.evaluate_every == 0:
+                    # evaluete the GFN by sampling complete trajectories
+                    eval_full_trajectories = []
+                    eval_logpf = []
+                    eval_logz = []
+                    eval_log_marginal = []
+                    eval_obs = eval_env.reset()
+                    for _ in range(100):
+                        logpf = 0.0
+                        logz = 0.0
+                        eval_obs["graphs_tuple"] = to_graphs_tuple(
+                            full_cliques, eval_obs["gfn_state"], args.K, args.x_dim
+                        )
+                        actions, key, logs = gflownet.act(
+                            params,
+                            key,
+                            eval_obs,
+                            epsilon,
+                            args.x_dim,
+                            args.K,
+                            temperature=1.0,
+                        )
+                        eval_obs, energies, dones = eval_env.step(actions)
+                        logpf += logs["logpf"]
+                        logz += logs["logz"]
+
+                        if dones[0][0]:
+                            eval_full_trajectories.append(eval_obs["gfn_state"][0][1])
+                            eval_logpf.append(logpf)
+                            eval_logz.append(logz)
+                            eval_log_marginal.append(
+                                np.log(
+                                    x_factors_values[
+                                        tuple(
+                                            [
+                                                eval_obs["gfn_state"][0][1][i]
+                                                for i in range(args.x_dim)
+                                            ]
+                                        )
+                                    ]
+                                )
+                            )
+                            eval_obs = eval_env.reset()
+                            logpf = 0.0
+                    # calculate and print reverse KL
+                    reverse_kl = gflownet.compute_reverse_kl(
+                        full_observations=jnp.stack(eval_full_trajectories, axis=0),
+                        full_cliques=full_cliques,
+                        traj_pf=jnp.array(eval_logpf),
+                        log_marginal=jnp.array(eval_log_marginal),
+                        ugm_model=true_ugm,
+                    )
+                    print(f"Reverse KL: {reverse_kl}")
+                    reverse_kls.append(reverse_kl.item())
+                    if not args.off_wandb:
+                        wandb.log(
+                            {
+                                "Reverse KL": reverse_kl,
+                            }
+                        )
+    axis[0].plot(steps, losses)
+    axis[1].plot(steps, log_likelihoods_hat, label=r"$\log \hat{Z}_x - \log Z$")
+    axis[1].legend()
+    plt.savefig(f"plots_{args.run_number}.png")
+
+    steps = np.array(steps)
+    losses = np.array(losses)
+    log_likelihoods_hat = np.array(log_likelihoods_hat)
+    np.save(f"steps_{args.run_number}", steps)
+    np.save(f"losses_{args.run_number}", losses)
+    np.save(f"log_likelihoods_hat_{args.run_number}", log_likelihoods_hat)
+    np.save(f"log_p_x_eval_{args.run_number}", np.array(log_p_x_eval.mean()))
+    np.save(f"reverse_kls_{args.run_number}", np.array(reverse_kls))
     # Sample from the learned policy
     # TODO:
     # learned_graphs = sample_from(
@@ -297,6 +413,13 @@ if __name__ == "__main__":
         help="Number of iterations (default: %(default)s)",
     )
 
+    optimization.add_argument(
+        "--optimizer",
+        type=str,
+        default="sgd",
+        help="optimizer name. Choices: sgd or adam (default: %(default)s)",
+    )
+
     # Replay buffer
     replay = parser.add_argument_group("Replay Buffer")
     replay.add_argument(
@@ -340,10 +463,23 @@ if __name__ == "__main__":
         help="Frequency for logging (default: %(default)s)",
     )
     misc.add_argument(
+        "--evaluate_every",
+        type=int,
+        default=100,
+        help="Frequency for evaluating (default: %(default)s)",
+    )
+    misc.add_argument(
         "--off_wandb",
         action="store_true",
         default=False,
         help="Whether to use Wandb for logs (default: %(default)s)",
+    )
+
+    misc.add_argument(
+        "--run_number",
+        type=int,
+        required=True,
+        help="Run identifier for the plots",
     )
 
     # Graph
@@ -372,6 +508,42 @@ if __name__ == "__main__":
         type=int,
         required=True,
         help="The number of discrete values that the variables can take?",
+    )
+
+    graph_args.add_argument(
+        "--latent_structure",
+        type=str,
+        default="random",
+        help="type of graph. For now, choices are G1 or random (default: %(default)s)",
+    )
+
+    transformer_args = parser.add_argument_group("Transformer")
+    transformer_args.add_argument(
+        "--embed_dim",
+        type=int,
+        default=128,
+        help="Number of dimensions of the embeddings sent to the transformer as input",
+    )
+    transformer_args.add_argument(
+        "--num_heads",
+        type=int,
+        default=4,
+        help="Number of attention heads for the transformer",
+    )
+    transformer_args.add_argument(
+        "--num_layers",
+        type=int,
+        default=6,
+        help="Number of layers for the transformer",
+    )
+    transformer_args.add_argument(
+        "--key_size",
+        type=int,
+        default=32,
+        help="Dimension of the key for the multi head attention mechanism",
+    )
+    transformer_args.add_argument(
+        "--dropout_rate", type=float, default=0.0, help="Dropout rate."
     )
 
     args = parser.parse_args()

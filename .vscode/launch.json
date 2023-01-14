@@ -32,11 +32,9 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "autoReload": {
-                "enable": true
+                "enable": false
             },
-            "purpose": [
-                "debug-test"
-            ]
+            "purpose": ["debug-test"]
         },
         {
             "name": "Python: Debug helper fns",
@@ -89,17 +87,17 @@
                 "--num_eval_samples",
                 "10",
                 "--prefill",
-                "500",
+                "10",
                 "--num_iterations",
-                "5000",
+                "15",
                 "--batch_size",
-                "32",
+                "6",
                 "--num_samples",
-                "100",
+                "2",
                 "--x_dim",
-                "4",
-                "--h_dim",
                 "8",
+                "--h_dim",
+                "4",
                 "--K",
                 "2",
                 "--seed",
@@ -107,7 +105,11 @@
                 "--log_every",
                 "10",
                 "--lr",
-                "0.00001"
+                "0.01",
+                "--run_number",
+                "1",
+                "--latent_structure",
+                "random"
             ]
         }
     ]

@@ -62,7 +62,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         observed[self.h_dim :] = 1
         values = np.array([self.K] * self.num_variables)
         values[self.h_dim :] = self.data[
-            np.random.randint(self.data.shape[0]), # FIXME: Replace with rng
+            np.random.randint(self.data.shape[0]),  # FIXME: Replace with rng
             self.h_dim :,
         ]
         gfn_state = (
@@ -101,7 +101,9 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         )
         for i in range(bsz):
             assert np.all(
-                (self._state["gfn_state"][i][0][obs_var] == 0)[actions[i, 0] != -1]
+                (self._state["gfn_state"][i][0][obs_var] == 0)[
+                    actions[i, 0] != -1
+                ]  # FIXME: There was an assertion error here when running x_dim=4, h_dim=6
             )
             if actions[i, 0] == -1:
                 continue
@@ -142,12 +144,20 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             self._state["unobserved_cliques"][i] = unobserved_cliques
             self._state["gfn_state"][i] = new_gfn_state
 
-            self._state["mask"][i] = np.array( # FIXME: I think that there is a bug here when only the last h node is available for sampling
+            self._state["mask"][
+                i
+            ] = np.array(  # FIXME: I think that there is a bug here when only the last h node is available for sampling
                 get_clique_selection_mask(
                     self._state["gfn_state"][i],
                     self._state["unobserved_cliques"][i],
                     self.K,
+                    self.h_dim,
                 )
+            )
+            assert np.all(
+                (
+                    1 - self._state["gfn_state"][i][0][self._state["mask"][i] == 1]
+                )  # FIXME: There was an assertion error here when running x_dim=4, h_dim=6
             )
             var_energies.append(var_energy)
             value_energies.append(value_energy)

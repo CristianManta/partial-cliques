@@ -13,7 +13,7 @@ from dag_gflownet.nets.transformer.gflownet import value_policy_transformer
 @pytest.fixture
 def setup():
     K = 2
-    batch_size = 16
+    batch_size = 1
     h_dim = 1
     x_dim = 1
     # Setting up a dummy GFN state
@@ -40,7 +40,7 @@ def test_value_policy_transformer(setup):
     batch_size = masks.shape[0]
     num_variables = masks.shape[1]
     for i in range(batch_size):
-        if i == 1: # Suppose that we don't observe the second "h" in the batch
+        if i == 1:  # Suppose that we don't observe the second "h" in the batch
             continue
         new_nodes = graphs.values.nodes.at[i * num_variables].set(num_variables + K + 1)
 
@@ -55,11 +55,34 @@ def test_value_policy_transformer(setup):
 
     # Initializing the model
     model = hk.transform(value_policy_transformer)
-    params = model.init(key, graphs, masks, x_dim, K)
+    params = model.init(
+        key,
+        np.repeat(np.array(graphs.values.nodes).reshape(1, -1), batch_size, axis=0),
+        masks,
+        x_dim,
+        K,
+        embed_dim=128,
+        num_heads=4,
+        num_layers=6,
+        key_size=32,
+        dropout_rate=0.0,
+    )
 
     # Applying the model
-    forward = jax.jit(model.apply, static_argnums=(4, 5))
-    log_policy_values, log_flows = forward(params, next_key, graphs, masks, x_dim, K)
+    forward = jax.jit(model.apply, static_argnums=(4, 5, 6, 7, 8, 9, 10))
+    log_policy_values, log_flows = forward(
+        params,
+        next_key,
+        np.repeat(np.array(graphs.values.nodes).reshape(1, -1), batch_size, axis=0),
+        masks,
+        x_dim,
+        K,
+        128,
+        4,
+        6,
+        32,
+        0.0,
+    )
 
     assert log_policy_values.shape == (masks.shape[0], K)
     assert log_flows.shape == (masks.shape[0],)

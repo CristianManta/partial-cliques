@@ -31,7 +31,7 @@ def setup():
 
     graphs = to_graphs_tuple(full_cliques, [gfn_state], K, x_dim, pad=False)
     mask = jnp.expand_dims(
-        jnp.array(get_clique_selection_mask(gfn_state, unobserved_cliques, K)), 0
+        jnp.array(get_clique_selection_mask(gfn_state, unobserved_cliques, K, h_dim)), 0
     )
     return graphs, mask, x_dim, K
 

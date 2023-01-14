@@ -25,7 +25,7 @@ def test_get_clique_selection_mask():
     )
     unobserved_cliques = [set([0, 1, 2, 6, 7, 8, 9]), set([3, 4, 5, 6, 7, 8, 9])]
 
-    mask = get_clique_selection_mask(gfn_state, unobserved_cliques, K)
+    mask = get_clique_selection_mask(gfn_state, unobserved_cliques, K, h_dim=6)
     assert np.all(mask == np.array([0, 1, 1, 0, 0, 0, 0, 0, 0, 0])), mask
 
 

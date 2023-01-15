@@ -152,7 +152,6 @@ def main(args):
         full_cliques, init_eval_observation["gfn_state"], args.K, args.x_dim
     )
 
-
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
@@ -196,7 +195,6 @@ def main(args):
                 )
 
                 train_steps = iteration - args.prefill
-                if (train_steps + 1) % args.log_every == 0:
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
                         wandb.log(

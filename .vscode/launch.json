@@ -106,8 +106,6 @@
                 "10",
                 "--lr",
                 "0.01",
-                "--run_number",
-                "1",
                 "--latent_structure",
                 "random"
             ]

@@ -67,7 +67,7 @@ echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> tempr
 echo "conda activate dag-gfn" >> temprun.sh
 echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
 
-echo "python train.py --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 3 --h_dim 6 --K 2 --seed 0 --log_every 10 --lr 0.03 --run_number 1" >> temprun.sh
+echo "python train.py --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 3 --h_dim 6 --K 2 --seed 0 --log_every 10 --lr 0.03" >> temprun.sh
 
 eval "sbatch temprun.sh"
 rm temprun.sh
@@ -86,7 +86,7 @@ echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> tempr
 echo "conda activate dag-gfn" >> temprun.sh
 echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
 
-echo "python train.py --latent_structure G1 --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 3 --h_dim 6 --K 2 --seed 0 --log_every 10 --lr 0.03 --run_number 2" >> temprun.sh
+echo "python train.py --latent_structure G1 --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 3 --h_dim 6 --K 2 --seed 0 --log_every 10 --lr 0.03" >> temprun.sh
 
 eval "sbatch temprun.sh"
 rm temprun.sh

@@ -6,7 +6,6 @@ import pickle
 import jax
 import wandb
 import os
-import matplotlib.pyplot as plt
 
 from tqdm import trange
 from numpy.random import default_rng
@@ -153,21 +152,6 @@ def main(args):
         full_cliques, init_eval_observation["gfn_state"], args.K, args.x_dim
     )
 
-    # Plotting
-    figure, axis = plt.subplots(2, figsize=(15, 15))
-    plt.subplots_adjust(hspace=1)
-    axis[0].set_title("Value Policy Loss")
-    axis[0].set(xlabel="Training Step")
-    axis[0].set(ylabel="Loss")
-    axis[1].set_title("Log Likelihood Lower Bound")
-    axis[1].set(xlabel="Training Step")
-    axis[1].set(ylabel="Log Probability Estimate")
-    axis[1].axhline(log_p_x_eval.mean(), color="r", label=r"$\log p(x)$")
-
-    steps = []
-    losses = []
-    log_likelihoods_hat = []
-    reverse_kls = []
 
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
@@ -213,9 +197,6 @@ def main(args):
 
                 train_steps = iteration - args.prefill
                 if (train_steps + 1) % args.log_every == 0:
-                    steps.append(train_steps)
-                    losses.append(logs["loss"])
-                    log_likelihoods_hat.append(log_p_hat_x_eval[0])
                 if not args.off_wandb:
                     if (train_steps + 1) % (args.log_every * 10) == 0:
                         wandb.log(
@@ -298,26 +279,13 @@ def main(args):
                         ugm_model=true_ugm,
                     )
                     print(f"Reverse KL: {reverse_kl}")
-                    reverse_kls.append(reverse_kl.item())
                     if not args.off_wandb:
                         wandb.log(
                             {
                                 "Reverse KL": reverse_kl,
                             }
                         )
-    axis[0].plot(steps, losses)
-    axis[1].plot(steps, log_likelihoods_hat, label=r"$\log \hat{Z}_x - \log Z$")
-    axis[1].legend()
-    plt.savefig(f"plots_{args.run_number}.png")
 
-    steps = np.array(steps)
-    losses = np.array(losses)
-    log_likelihoods_hat = np.array(log_likelihoods_hat)
-    np.save(f"steps_{args.run_number}", steps)
-    np.save(f"losses_{args.run_number}", losses)
-    np.save(f"log_likelihoods_hat_{args.run_number}", log_likelihoods_hat)
-    np.save(f"log_p_x_eval_{args.run_number}", np.array(log_p_x_eval.mean()))
-    np.save(f"reverse_kls_{args.run_number}", np.array(reverse_kls))
     # Sample from the learned policy
     # TODO:
     # learned_graphs = sample_from(
@@ -473,13 +441,6 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Whether to use Wandb for logs (default: %(default)s)",
-    )
-
-    misc.add_argument(
-        "--run_number",
-        type=int,
-        required=True,
-        help="Run identifier for the plots",
     )
 
     # Graph

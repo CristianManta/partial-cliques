@@ -161,15 +161,16 @@ def main(args):
             )
             actions, key, logs = gflownet.act(
                 params, key, observations, epsilon, args.x_dim, args.K, temperature=2.0
-            )  # TODO:
+            )
             next_observations, energies, dones = env.step(actions)
-            replay.add(  # TODO:
+            replay.add(
                 observations,
                 actions,
                 logs["is_exploration"],
                 next_observations,
                 energies,
                 dones,
+                args.partial_trajectories,
             )
 
             if dones[0][0]:
@@ -400,6 +401,14 @@ if __name__ == "__main__":
         default=1000,
         help="Number of iterations with a random policy to prefill "
         "the replay buffer (default: %(default)s)",
+    )
+
+    replay.add_argument(
+        "--partial_trajectories",
+        action="store_true",
+        default=False,
+        help="If this option is set, we only add the non terminal transitions to the replay buffer."
+        "(default: %(default)s)",
     )
 
     # Exploration

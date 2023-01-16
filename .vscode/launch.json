@@ -10,10 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": false,
-            "autoReload": {
-                "enable": true
-            },
+            "justMyCode": true,
             "args": [
                 "--off_wandb",
                 "--batch_size",
@@ -31,9 +28,6 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "autoReload": {
-                "enable": false
-            },
             "purpose": ["debug-test"]
         },
         {
@@ -84,6 +78,7 @@
             "justMyCode": true,
             "args": [
                 "--off_wandb",
+                "--partial_trajectories",
                 "--num_eval_samples",
                 "10",
                 "--prefill",
@@ -95,9 +90,9 @@
                 "--num_samples",
                 "2",
                 "--x_dim",
-                "8",
+                "3",
                 "--h_dim",
-                "4",
+                "6",
                 "--K",
                 "2",
                 "--seed",
@@ -107,7 +102,7 @@
                 "--lr",
                 "0.01",
                 "--latent_structure",
-                "random"
+                "G1"
             ]
         }
     ]

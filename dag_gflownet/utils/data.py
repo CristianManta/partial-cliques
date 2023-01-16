@@ -86,6 +86,7 @@ def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
         latent_nodes = ["h" + str(i) for i in range(d)]
     elif latent_structure == "G1":
         assert D == 3
+        assert d == 6
         latent_nodes = ["h" + str(i) for i in range(6)]
     else:
         raise ValueError(f"Undefined latent structure: {latent_structure}")

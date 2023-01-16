@@ -42,7 +42,14 @@ class ReplayBuffer:
         self._prev = np.full((capacity,), -1, dtype=np.int_)
 
     def add(
-        self, observations, actions, is_exploration, next_observations, energies, dones
+        self,
+        observations,
+        actions,
+        is_exploration,
+        next_observations,
+        energies,
+        dones,
+        partial_trajectories,
     ):
 
         (var_energies, value_energies) = energies
@@ -50,6 +57,10 @@ class ReplayBuffer:
         bsz = len(observations["gfn_state"])
 
         for i in range(bsz):
+            if partial_trajectories and np.all(observations["gfn_state"][i][0] == 1):
+                continue  # Don't add the terminating transition to the replay
+                # buffer if the flag `partial_trajectories` is set to True
+
             # num_samples = np.sum(~dones)
             add_idx = self._index
             self._index = (self._index + 1) % self.capacity
@@ -69,8 +80,7 @@ class ReplayBuffer:
                 "var_energies": np.array([var_energies[i]]),
                 "value_energies": np.array([value_energies[i]]),
                 "mask": observations["mask"][i],
-                "next_mask": next_observations["mask"][i]
-                # Extra keys for monitoring
+                "next_mask": next_observations["mask"][i],
             }
 
             for name in data:

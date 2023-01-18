@@ -9,7 +9,7 @@ from jax import lax, nn, jit, vmap
 from dag_gflownet.utils.gflownet import log_policy_cliques
 
 
-def clique_policy(graphs, masks, x_dim, K, sampling_method=1):
+def clique_policy(graphs, masks, x_dim, K, sampling_method):
     """
     Parameters
     ----------

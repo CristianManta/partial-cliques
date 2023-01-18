@@ -119,6 +119,7 @@ def main(args):
         num_layers=args.num_layers,
         key_size=args.key_size,
         dropout_rate=args.dropout_rate,
+        pb=args.pb,
     )
     if args.optimizer == "adam":
         optimizer = optax.adam(args.lr)
@@ -447,6 +448,19 @@ if __name__ == "__main__":
         default=False,
         help="If this option is set, we only add the non terminal transitions to the replay buffer."
         "(default: %(default)s)",
+    )
+
+    misc.add_argument(
+        "--pb",
+        type=str,
+        default="uniform",
+        help=(
+            "backwards probability parametrization. "
+            "Choices: uniform, learnable or deterministic. (default: %(default)s). "
+            "If the deterministic option is chosen, log_pb will be 0 and "
+            "the clique policy will simply sample all the latent variables "
+            "in increasing order of their index."
+        ),
     )
 
     # Graph

@@ -48,6 +48,7 @@ class DAGGFlowNet:
         num_layers=6,
         key_size=32,
         dropout_rate=0.0,
+        pb="uniform",
     ):
 
         clique_model = clique_policy
@@ -67,6 +68,7 @@ class DAGGFlowNet:
         self.num_layers = num_layers
         self.key_size = key_size
         self.dropout_rate = dropout_rate
+        self.pb = pb
 
     def loss(
         self, params, samples, x_dim, K, forward_key
@@ -104,7 +106,15 @@ class DAGGFlowNet:
         )
 
         log_pf = nn.log_softmax(logits_value)[jnp.arange(bsz), samples["actions"][:, 1]]
-        log_pb = jnp.zeros_like(log_pf)
+        if self.pb == "uniform":
+            log_pb = jnp.full_like(log_pf, -jnp.log(self.h_dim))
+        elif self.pb == "deterministic":
+            log_pb = jnp.zeros_like(log_pf)
+        elif self.pb == "learnable":
+            raise NotImplementedError()  # TODO
+        else:
+            raise ValueError("Invalid pb choice.")
+
         # log_pb = jnp.where(
         #     samples["dones"],
         #     0,
@@ -170,8 +180,22 @@ class DAGGFlowNet:
         key, subkey1, forward_key = random.split(key, 3)
 
         # First get the clique policy
+        if self.pb == "uniform":
+            sampling_method = 3
+        elif self.pb == "deterministic":
+            sampling_method = 2
+        elif self.pb == "learnable":
+            raise NotImplementedError()
+        else:
+            raise ValueError("Invalid pb choice")
+
         log_probs_clique = self.clique_model.apply(
-            params.clique_model, graphs, masks, x_dim, K, sampling_method=2
+            params.clique_model,
+            graphs,
+            masks,
+            x_dim,
+            K,
+            sampling_method=sampling_method,
         )
 
         # Get uniform policy
@@ -185,7 +209,7 @@ class DAGGFlowNet:
         # Sample actions
         # clique_policy_actions = batch_random_choice(subkey2, jnp.exp(log_probs_clique), masks)
         clique_actions = jax.random.categorical(
-            subkey1, log_probs_clique / 999
+            subkey1, log_probs_clique  # / 999
         )  # a single integer between 0 and h_dim
 
         """
@@ -312,7 +336,17 @@ class DAGGFlowNet:
 
         # Initialize the models
         key1, key2 = random.split(key, 2)
-        clique_params = self.clique_model.init(key1, graph, mask, x_dim, K)
+        
+        if self.pb == "uniform":
+            sampling_method = 3
+        elif self.pb == "deterministic":
+            sampling_method = 2
+        elif self.pb == "learnable":
+            raise NotImplementedError()
+        else:
+            raise ValueError("Invalid pb choice")
+        
+        clique_params = self.clique_model.init(key1, graph, mask, x_dim, K, sampling_method)
         value_params = self.value_model.init(
             key2,
             values,

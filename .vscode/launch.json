@@ -78,6 +78,8 @@
             "justMyCode": true,
             "args": [
                 "--off_wandb",
+                "--pb",
+                "uniform",
                 "--partial_trajectories",
                 "--num_eval_samples",
                 "10",

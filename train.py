@@ -170,7 +170,6 @@ def main(args):
                 next_observations,
                 energies,
                 dones,
-                args.partial_trajectories,
             )
 
             if dones[0][0]:
@@ -403,14 +402,6 @@ if __name__ == "__main__":
         "the replay buffer (default: %(default)s)",
     )
 
-    replay.add_argument(
-        "--partial_trajectories",
-        action="store_true",
-        default=False,
-        help="If this option is set, we only add the non terminal transitions to the replay buffer."
-        "(default: %(default)s)",
-    )
-
     # Exploration
     exploration = parser.add_argument_group("Exploration")
     exploration.add_argument(
@@ -448,6 +439,14 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Whether to use Wandb for logs (default: %(default)s)",
+    )
+
+    misc.add_argument(
+        "--partial_trajectories",
+        action="store_true",
+        default=False,
+        help="If this option is set, we only add the non terminal transitions to the replay buffer."
+        "(default: %(default)s)",
     )
 
     # Graph

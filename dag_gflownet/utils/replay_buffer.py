@@ -49,7 +49,6 @@ class ReplayBuffer:
         next_observations,
         energies,
         dones,
-        partial_trajectories,
     ):
 
         (var_energies, value_energies) = energies
@@ -57,9 +56,6 @@ class ReplayBuffer:
         bsz = len(observations["gfn_state"])
 
         for i in range(bsz):
-            if partial_trajectories and np.all(observations["gfn_state"][i][0] == 1):
-                continue  # Don't add the terminating transition to the replay
-                # buffer if the flag `partial_trajectories` is set to True
 
             # num_samples = np.sum(~dones)
             add_idx = self._index

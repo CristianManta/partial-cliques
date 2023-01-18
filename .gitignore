@@ -139,3 +139,10 @@ settings.json
 
 # Playground
 playground.ipynb
+
+# data
+*.npy
+*.csv
+*.zip
+*.pdf
+*.png

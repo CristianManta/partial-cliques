@@ -208,7 +208,9 @@ class DAGGFlowNet:
                 values=graphs.values._replace(nodes=new_nodes),
             )
             """
-            observations["gfn_state"][i][1][clique_actions[i]] = K + 1
+            assert clique_actions[i] <= self.h_dim
+            if clique_actions[i] < self.h_dim:
+                observations["gfn_state"][i][1][clique_actions[i]] = K + 1
 
         # use the value GFN to sample a value for the variable we just observed
         logits_value, log_flow = self.value_model.apply(

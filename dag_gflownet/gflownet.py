@@ -4,6 +4,8 @@ import haiku as hk
 import optax
 import numpy as np
 
+from copy import deepcopy
+
 from functools import partial
 from jax import grad, random, jit, nn
 
@@ -16,7 +18,7 @@ from dag_gflownet.utils.gflownet import (
     detailed_balance_loss_free_energy_to_go,
 )
 from dag_gflownet.utils.jnp_utils import batch_random_choice
-from dag_gflownet.utils.data import get_value_policy_energy
+from dag_gflownet.utils.data import get_value_policy_energy, is_valid_state
 from dag_gflownet.utils.jraph_utils import Graph
 
 GFlowNetParameters = namedtuple("GFlowNetParameters", ["clique_model", "value_model"])
@@ -49,6 +51,7 @@ class DAGGFlowNet:
         key_size=32,
         dropout_rate=0.0,
         pb="uniform",
+        full_cliques=None,
     ):
 
         clique_model = clique_policy
@@ -69,6 +72,22 @@ class DAGGFlowNet:
         self.key_size = key_size
         self.dropout_rate = dropout_rate
         self.pb = pb
+        self.full_cliques = full_cliques
+
+    def get_num_valid_node_removals(self, gfn_states, bsz):
+        counts = np.zeros((bsz,), dtype=int)
+        for k, state in enumerate(gfn_states):
+            count = 0
+            observed_idx = np.nonzero(state[: self.h_dim])
+            for ix in observed_idx:
+                state[ix] = 0  # Temporarily set this node to unobserved
+                if is_valid_state(state, self.full_cliques):
+                    count += 1
+                state[ix] = 1  # Undo the change and try again with the next candidate
+
+            counts[k] = count
+
+        return counts
 
     def loss(
         self, params, samples, x_dim, K, forward_key
@@ -107,7 +126,11 @@ class DAGGFlowNet:
 
         log_pf = nn.log_softmax(logits_value)[jnp.arange(bsz), samples["actions"][:, 1]]
         if self.pb == "uniform":
-            log_pb = jnp.full_like(log_pf, -jnp.log(self.h_dim))
+            num_previous_states = self.get_num_valid_node_removals(
+                deepcopy(samples["next_observed"]), bsz
+            )
+
+            log_pb = -jnp.log(num_previous_states)
         elif self.pb == "deterministic":
             log_pb = jnp.zeros_like(log_pf)
         elif self.pb == "learnable":
@@ -336,7 +359,7 @@ class DAGGFlowNet:
 
         # Initialize the models
         key1, key2 = random.split(key, 2)
-        
+
         if self.pb == "uniform":
             sampling_method = 3
         elif self.pb == "deterministic":
@@ -345,8 +368,10 @@ class DAGGFlowNet:
             raise NotImplementedError()
         else:
             raise ValueError("Invalid pb choice")
-        
-        clique_params = self.clique_model.init(key1, graph, mask, x_dim, K, sampling_method)
+
+        clique_params = self.clique_model.init(
+            key1, graph, mask, x_dim, K, sampling_method
+        )
         value_params = self.value_model.init(
             key2,
             values,

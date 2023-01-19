@@ -233,6 +233,10 @@ def get_str_rep(nodes, model):
     return set([sorted(all_nodes)[n] for n in nodes])
 
 
+def is_valid_state(gfn_state: tuple, full_cliques: list):
+    pass  # TODO
+
+
 def get_clique_selection_mask(
     gfn_state: tuple, unobserved_cliques: list, K: int, h_dim: int
 ):

@@ -120,6 +120,7 @@ def main(args):
         key_size=args.key_size,
         dropout_rate=args.dropout_rate,
         pb=args.pb,
+        full_cliques=full_cliques,
     )
     if args.optimizer == "adam":
         optimizer = optax.adam(args.lr)

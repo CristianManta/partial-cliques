@@ -81,7 +81,7 @@ class DAGGFlowNet:
             observed_nodes = np.nonzero(state)[0]
             for clique in full_cliques:
                 latents = clique - x
-                if set(observed_nodes) < latents:
+                if set(observed_nodes) <= latents:
                     valid = True
                     break
 

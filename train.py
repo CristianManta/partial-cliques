@@ -154,6 +154,7 @@ def main(args):
         full_cliques, init_eval_observation["gfn_state"], args.K, args.x_dim
     )
 
+    traj_length = 0
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
@@ -174,10 +175,12 @@ def main(args):
                 dones,
             )
 
-            if dones[0][0]:
+            if dones[0][0] or traj_length >= args.max_traj_length:
                 observations = env.reset()
+                traj_length = 0
             else:
                 observations = next_observations
+                traj_length += 1
 
             if iteration >= args.prefill:
                 # Update the parameters of the GFlowNet
@@ -401,6 +404,13 @@ if __name__ == "__main__":
         type=int,
         default=1000,
         help="Number of iterations with a random policy to prefill "
+        "the replay buffer (default: %(default)s)",
+    )
+    replay.add_argument(
+        "--max_traj_length",
+        type=int,
+        default=1000,
+        help="Maximal length of the trajectory to include in "
         "the replay buffer (default: %(default)s)",
     )
 

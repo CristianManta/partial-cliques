@@ -18,7 +18,7 @@ from dag_gflownet.utils.gflownet import (
     detailed_balance_loss_free_energy_to_go,
 )
 from dag_gflownet.utils.jnp_utils import batch_random_choice
-from dag_gflownet.utils.data import get_value_policy_energy, is_valid_state
+from dag_gflownet.utils.data import get_value_policy_energy
 from dag_gflownet.utils.jraph_utils import Graph
 
 GFlowNetParameters = namedtuple("GFlowNetParameters", ["clique_model", "value_model"])
@@ -74,14 +74,28 @@ class DAGGFlowNet:
         self.pb = pb
         self.full_cliques = full_cliques
 
-    def get_num_valid_node_removals(self, gfn_states, bsz):
+    def get_num_valid_node_removals(self, next_observed, bsz):
+        def is_valid_state(state, full_cliques, h_dim, x_dim):
+            valid = False
+            x = {h_dim + i for i in range(x_dim)}
+            observed_nodes = np.nonzero(state)[0]
+            for clique in full_cliques:
+                latents = clique - x
+                if set(observed_nodes) < latents:
+                    valid = True
+                    break
+
+            return valid
+
+        next_observed = next_observed[:, : self.h_dim]
+
         counts = np.zeros((bsz,), dtype=int)
-        for k, state in enumerate(gfn_states):
+        for k, state in enumerate(next_observed):
             count = 0
-            observed_idx = np.nonzero(state[: self.h_dim])
+            observed_idx = np.nonzero(state)[0]
             for ix in observed_idx:
                 state[ix] = 0  # Temporarily set this node to unobserved
-                if is_valid_state(state, self.full_cliques):
+                if is_valid_state(state, self.full_cliques, self.h_dim, self.x_dim):
                     count += 1
                 state[ix] = 1  # Undo the change and try again with the next candidate
 
@@ -340,7 +354,7 @@ class DAGGFlowNet:
             # + np.log(ugm_model.get_partition_function())
         return jnp.mean(jnp.array(kl_terms))
 
-    @partial(jit, static_argnums=(0, 4, 5))
+    # @partial(jit, static_argnums=(0, 4, 5))
     def step(self, params, state, samples, x_dim, K, forward_key):
         grads, logs = grad(self.loss, has_aux=True)(
             params, samples, x_dim, K, forward_key

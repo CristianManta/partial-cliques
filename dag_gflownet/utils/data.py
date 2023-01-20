@@ -88,6 +88,13 @@ def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
         assert D == 3
         assert d == 6
         latent_nodes = ["h" + str(i) for i in range(6)]
+
+    elif latent_structure == "random_chain_graph_c3":
+        # To ensure that cliques are of size 3 and x_dim is equal to the number of cliques
+        assert d % 3 == 0
+        assert D == 2 * int(d / 3) - 1
+        latent_nodes = ["h" + str(i) for i in range(d)]
+
     else:
         raise ValueError(f"Undefined latent structure: {latent_structure}")
 
@@ -115,6 +122,17 @@ def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
             ("h3", "h5"),
             ("h4", "h5"),
         ]
+
+    elif latent_structure == "random_chain_graph_c3":
+
+        edges = []
+        for e0_idx in range(d - 1):
+            if e0_idx % 3 == 0:
+                edges.append((latent_nodes[e0_idx], latent_nodes[e0_idx + 1]))
+                edges.append((latent_nodes[e0_idx], latent_nodes[e0_idx + 2]))
+            else:
+                edges.append((latent_nodes[e0_idx], latent_nodes[e0_idx + 1]))
+
     else:
         raise ValueError(f"Undefined latent structure: {latent_structure}")
 
@@ -142,6 +160,16 @@ def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
         potential_fns[0][0] = 2  # x0=0, x1=0, x2=0 -> h0=0, h1=0, h2=0
         potential_fns[1][-1] = 2  # x0=1, x1=1, x2=1 -> h2=1, h3=1
         potential_fns[2][2**D + 1] = 2  # x0=0, x1=0, x2=1 -> h3=0, h4=0, h5=1
+
+    elif latent_structure == "random_chain_graph_c3":
+        potential_fns = [
+            0.01 * np.ones((2 ** (len(list(clique))))) for clique in cliques
+        ]
+
+        for i in range(D):
+            # x_i = 1 iff clique c_i is activated (i.e. the values of its nodes are all 1)
+            potential_fns[i][-(2**D) + 2 ** (D - 1 - i)] = 2
+
     else:
         raise ValueError(f"Undefined latent structure: {latent_structure}")
 

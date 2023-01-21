@@ -78,35 +78,6 @@ class DAGGFlowNet:
         self.pb = pb
         self.full_cliques = full_cliques
 
-    def get_num_valid_node_removals(self, next_observed, bsz):
-        def is_valid_state(state, full_cliques, h_dim, x_dim):
-            valid = False
-            x = {h_dim + i for i in range(x_dim)}
-            observed_nodes = np.nonzero(state)[0]
-            for clique in full_cliques:
-                latents = clique - x
-                if set(observed_nodes) <= latents:
-                    valid = True
-                    break
-
-            return valid
-
-        next_observed = next_observed[:, : self.h_dim]
-
-        counts = np.zeros((bsz,), dtype=int)
-        for k, state in enumerate(next_observed):
-            count = 0
-            observed_idx = np.nonzero(state)[0]
-            for ix in observed_idx:
-                state[ix] = 0  # Temporarily set this node to unobserved
-                if is_valid_state(state, self.full_cliques, self.h_dim, self.x_dim):
-                    count += 1
-                state[ix] = 1  # Undo the change and try again with the next candidate
-
-            counts[k] = count
-
-        return counts
-
     def loss(
         self, params, samples, x_dim, K, forward_key
     ):  # TODO: Need to know how the samples look like

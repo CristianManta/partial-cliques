@@ -136,6 +136,7 @@ def main(args):
         subkey,
         optimizer,
         replay.dummy["graph"],
+        replay.dummy["observed"],
         replay.dummy["values"],
         replay.dummy["mask"],
         args.x_dim,

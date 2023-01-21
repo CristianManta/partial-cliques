@@ -12,10 +12,14 @@ from jax import grad, random, jit, nn
 from collections import namedtuple
 
 from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy, value_policy_MLP
-from dag_gflownet.nets.transformer.gflownet import value_policy_transformer
+from dag_gflownet.nets.transformer.gflownet import (
+    value_policy_transformer,
+    clique_policy_transformer,
+)
 from dag_gflownet.utils.gflownet import (
     uniform_log_policy,
     detailed_balance_loss_free_energy_to_go,
+    MASKED_VALUE,
 )
 from dag_gflownet.utils.jnp_utils import batch_random_choice
 from dag_gflownet.utils.data import get_value_policy_energy, find_incomplete_clique
@@ -54,10 +58,10 @@ class DAGGFlowNet:
         full_cliques=None,
     ):
 
-        clique_model = clique_policy
+        clique_model = clique_policy_transformer
         value_model = value_policy_transformer
 
-        self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
+        self.clique_model = hk.transform(clique_model)
         self.value_model = hk.transform(value_model)
         self.delta = delta
         self.x_dim = x_dim
@@ -122,6 +126,7 @@ class DAGGFlowNet:
         # calculate batch size
 
         forward_key, _ = jax.random.split(forward_key, 2)
+        forward_key_clique, _ = jax.random.split(forward_key, 2)
 
         bsz = samples["observed"].shape[0]
         logits_value, value_log_flows = self.value_model.apply(
@@ -138,7 +143,30 @@ class DAGGFlowNet:
             dropout_rate=self.dropout_rate,
         )
 
-        log_pf = nn.log_softmax(logits_value)[jnp.arange(bsz), samples["actions"][:, 1]]
+        logits_clique = self.clique_model.apply(
+            params.clique_model,
+            forward_key_clique,
+            samples["observed"].astype("int"),
+            samples["values"],
+            samples["mask"],
+            x_dim,
+            K,
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            num_layers=self.num_layers,
+            key_size=self.key_size,
+            dropout_rate=self.dropout_rate,
+        )
+
+        log_pf_value = nn.log_softmax(logits_value)[
+            jnp.arange(bsz), samples["actions"][:, 1]
+        ]
+        log_pf_clique = nn.log_softmax(logits_clique)[
+            jnp.arange(bsz), samples["actions"][:, 0]
+        ]
+
+        log_pf = log_pf_value + log_pf_clique
+
         if self.pb == "uniform":
             log_pb = jnp.zeros_like(log_pf)
             for i in range(bsz):
@@ -241,13 +269,19 @@ class DAGGFlowNet:
         else:
             raise ValueError("Invalid pb choice")
 
-        log_probs_clique = self.clique_model.apply(
+        logits_clique = self.clique_model.apply(
             params.clique_model,
-            graphs,
+            key,
+            observations["gfn_state"][0][0].reshape(1, -1),
+            observations["gfn_state"][0][1].reshape(1, -1),
             masks,
             x_dim,
             K,
-            sampling_method=sampling_method,
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            num_layers=self.num_layers,
+            key_size=self.key_size,
+            dropout_rate=self.dropout_rate,
         )
 
         # Get uniform policy
@@ -261,8 +295,13 @@ class DAGGFlowNet:
         # Sample actions
         # clique_policy_actions = batch_random_choice(subkey2, jnp.exp(log_probs_clique), masks)
         clique_actions = jax.random.categorical(
-            subkey1, log_probs_clique  # / 999
+            subkey1, logits_clique  # / 999
         )  # a single integer between 0 and h_dim
+
+        clique_actions = jnp.where(
+            jnp.all(logits_clique == MASKED_VALUE, axis=-1), self.h_dim, clique_actions
+        )  # h_dim means stop action.
+        # Only output the stop action when there is no other available action
 
         """
         if clique_actions == self.h_dim:
@@ -382,7 +421,7 @@ class DAGGFlowNet:
 
         return (params, state, logs, forward_key)
 
-    def init(self, key, optimizer, graph, values, mask, x_dim, K):
+    def init(self, key, optimizer, graph, obs, values, mask, x_dim, K):
         # Set the optimizer
         self._optimizer = optax.chain(optimizer, optax.zero_nans())
 
@@ -399,7 +438,17 @@ class DAGGFlowNet:
             raise ValueError("Invalid pb choice")
 
         clique_params = self.clique_model.init(
-            key1, graph, mask, x_dim, K, sampling_method
+            key1,
+            obs,
+            values,
+            mask,
+            x_dim,
+            K,
+            embed_dim=self.embed_dim,
+            num_heads=self.num_heads,
+            num_layers=self.num_layers,
+            key_size=self.key_size,
+            dropout_rate=self.dropout_rate,
         )
         value_params = self.value_model.init(
             key2,

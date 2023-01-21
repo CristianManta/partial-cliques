@@ -7,7 +7,10 @@ import jraph
 import haiku as hk
 
 from dag_gflownet.utils.jraph_utils import Graph, to_graphs_tuple
-from dag_gflownet.nets.transformer.gflownet import value_policy_transformer
+from dag_gflownet.nets.transformer.gflownet import (
+    value_policy_transformer,
+    clique_policy_transformer,
+)
 
 
 @pytest.fixture
@@ -33,6 +36,61 @@ def setup():
     )
     mask = jnp.ones((batch_size, x_dim + h_dim))  # Only the shape matters this time
     return graphs, mask, x_dim, K
+
+
+def test_clique_policy_transformer(setup):
+    graphs, masks, x_dim, K = setup
+    batch_size = masks.shape[0]
+    num_variables = masks.shape[1]
+    for i in range(batch_size):
+        if i == 1:  # Suppose that we don't observe the second "h" in the batch
+            continue
+        new_nodes = graphs.values.nodes.at[i * num_variables].set(num_variables + K + 1)
+
+        graphs = Graph(
+            structure=graphs.structure,
+            values=graphs.values._replace(nodes=new_nodes),
+        )
+
+    seed = 0
+    key = random.PRNGKey(seed)
+    next_key, _ = jax.random.split(key, 2)
+
+    # Initializing the model
+    model = hk.transform(clique_policy_transformer)
+    params = model.init(
+        key,
+        np.array([[0, 1]]),
+        np.repeat(np.array(graphs.values.nodes).reshape(1, -1), batch_size, axis=0),
+        masks,
+        x_dim,
+        K,
+        embed_dim=128,
+        num_heads=4,
+        num_layers=6,
+        key_size=32,
+        dropout_rate=0.0,
+    )
+
+    # Applying the model
+    forward = jax.jit(model.apply, static_argnums=(5, 6, 7, 8, 9, 10, 11))
+    logits = forward(
+        params,
+        next_key,
+        np.array([[0, 1]]),
+        np.repeat(np.array(graphs.values.nodes).reshape(1, -1), batch_size, axis=0),
+        masks,
+        x_dim,
+        K,
+        128,
+        4,
+        6,
+        32,
+        0.0,
+    )
+    h_dim = num_variables - x_dim
+
+    assert logits.shape == (masks.shape[0], h_dim)
 
 
 def test_value_policy_transformer(setup):

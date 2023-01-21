@@ -3,6 +3,64 @@ import haiku as hk
 from copy import deepcopy
 
 from dag_gflownet.nets.transformer.transformers import Transformer
+from dag_gflownet.utils.gflownet import mask_logits
+
+
+def clique_policy_transformer(
+    observations_vector,
+    values_vector,
+    masks,
+    x_dim,
+    K,
+    embed_dim,
+    num_heads,
+    num_layers,
+    key_size,
+    dropout_rate,
+):
+
+    assert K == 2
+
+    batch_size, num_variables = masks.shape
+    h_dim = num_variables - x_dim
+    masks = masks[:, :h_dim]
+
+    transformer = Transformer(
+        num_heads=num_heads,
+        num_layers=num_layers,
+        key_size=key_size,
+        dropout_rate=dropout_rate,
+    )
+
+    # Embeddings dictionaries
+    pos_embeddings_list = hk.Embed(num_variables, embed_dim=embed_dim)
+    value_embeddings_list = hk.Embed(K + 2, embed_dim=embed_dim)
+    obs_embeddings_list = hk.Embed(
+        2, embed_dim=embed_dim
+    )  # A node is either observed or not
+
+    # Embeddings for the policy head
+    structural_embeddings = pos_embeddings_list(
+        jnp.arange(num_variables)[jnp.newaxis, ...].repeat(batch_size, axis=0)
+    )
+    value_embeddings = value_embeddings_list(values_vector)
+    obs_embeddings = obs_embeddings_list(observations_vector)
+
+    node_embeddings = jnp.reshape(
+        structural_embeddings + value_embeddings + obs_embeddings,
+        (batch_size, -1, embed_dim),
+    )
+
+    node_features = transformer(node_embeddings)
+    logits = hk.nets.MLP([embed_dim, 1], name="logit")(node_features)[:, :h_dim, :]
+    logits = jnp.squeeze(logits, axis=-1)
+
+    temperature = hk.get_parameter("temperature", (), init=hk.initializers.Constant(1))
+
+    logits = logits / temperature
+    logits = mask_logits(logits, masks)
+
+    return logits
 
 
 def value_policy_transformer(

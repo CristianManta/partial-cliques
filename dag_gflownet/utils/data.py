@@ -84,10 +84,6 @@ def get_data(name, args, rng=default_rng()):
 def get_random_graph(d, D, n, m, rng=default_rng(), latent_structure="random"):
     if latent_structure == "random":
         latent_nodes = ["h" + str(i) for i in range(d)]
-    elif latent_structure == "G1":
-        assert D == 3
-        assert d == 6
-        latent_nodes = ["h" + str(i) for i in range(6)]
 
     elif latent_structure == "random_chain_graph_c3":
         # To ensure that cliques are of size 3 and x_dim is equal to the number of cliques
@@ -259,6 +255,58 @@ def get_index_rep(nodes, model):
 def get_str_rep(nodes, model):
     all_nodes = [n for n in model.nodes]
     return set([sorted(all_nodes)[n] for n in nodes])
+
+
+def get_chain_clique_selection_mask(
+    gfn_state: tuple, K: int, h_dim: int, clique_size=3
+):
+    def find_incomplete_clique():
+        incomplete_clique_ix = -1
+        for i in range(h_dim // clique_size):
+            n_observed_vars = np.sum(
+                gfn_state[0][clique_size * i : clique_size * (i + 1)]
+            )
+            if n_observed_vars > 0 and n_observed_vars < clique_size:
+                incomplete_clique_ix = i
+
+        assert (
+            incomplete_clique_ix != -1
+        )  # This function is only called when there is at least one incomplete clique
+
+        incomplete_clique = {
+            node
+            for node in range(
+                clique_size * incomplete_clique_ix,
+                clique_size * (incomplete_clique_ix + 1),
+            )
+        }
+        return incomplete_clique
+
+    assert len(gfn_state) == 3
+    assert len(gfn_state[0]) == len(gfn_state[1])
+    assert len(gfn_state[0]) == len(gfn_state[2])
+    assert len(np.unique(gfn_state[0])) <= 2
+    assert len(np.unique(gfn_state[2])) <= 2
+    assert np.max(gfn_state[1]) <= K
+
+    N = len(gfn_state[0])
+    x_dim = N - h_dim
+    mask = np.zeros(N)
+
+    observed_vars = np.nonzero(gfn_state[0])[0].flatten()
+
+    num_latent_observed_vars = len(observed_vars) - x_dim
+
+    if num_latent_observed_vars % clique_size == 0:
+        mask = 1 - gfn_state[0]
+    else:
+        incomplete_clique = find_incomplete_clique()
+
+        eligible_vars = incomplete_clique - set(observed_vars)
+        eligible_vars = list(filter(lambda x: x < h_dim, eligible_vars))
+        mask[np.array(eligible_vars)] = 1
+
+    return mask
 
 
 def get_clique_selection_mask(

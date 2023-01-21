@@ -62,6 +62,7 @@ def main(args):
         full_cliques,
         factors,
     ) = graph
+
     true_partition_fn = true_ugm.get_partition_function()
     obs_nodes = ["x" + str(i) for i in range(args.x_dim)]
     x_factors_values = factor_sum_product(
@@ -87,6 +88,7 @@ def main(args):
         K=args.K,
         graph=true_ugm,
         data=train_data,
+        structure=args.latent_structure
     )
 
     eval_env = GFlowNetDAGEnv(
@@ -506,7 +508,7 @@ if __name__ == "__main__":
         "--latent_structure",
         type=str,
         default="random",
-        help="type of graph. For now, choices are G1 or random (default: %(default)s)",
+        help="type of graph. For now, choices are random or random_chain_graph_c3 (default: %(default)s)",
     )
 
     transformer_args = parser.add_argument_group("Transformer")

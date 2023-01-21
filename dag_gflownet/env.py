@@ -10,13 +10,23 @@ from dag_gflownet.utils.cache import LRUCache
 from dag_gflownet.utils.data import (
     get_value_policy_energy,
     get_potential_fns,
+    get_chain_clique_selection_mask,
     get_clique_selection_mask,
 )
 
 
 class GFlowNetDAGEnv(gym.vector.VectorEnv):
     def __init__(
-        self, num_envs, h_dim, x_dim, K, graph, full_cliques, clique_potentials, data
+        self,
+        num_envs,
+        h_dim,
+        x_dim,
+        K,
+        graph,
+        full_cliques,
+        clique_potentials,
+        data,
+        structure,
     ):
         """GFlowNet environment for learning a distribution over DAGs.
 
@@ -47,6 +57,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         self.full_cliques = full_cliques
         self.clique_potentials = clique_potentials
         self.data = np.array(data)
+        self.structure = structure
 
         # TODO: Change this to the appropriate obs space
         observation_space = Dict(
@@ -144,16 +155,28 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             self._state["unobserved_cliques"][i] = unobserved_cliques
             self._state["gfn_state"][i] = new_gfn_state
 
-            self._state["mask"][
-                i
-            ] = np.array(  # FIXME: I think that there is a bug here when only the last h node is available for sampling
-                get_clique_selection_mask(
-                    self._state["gfn_state"][i],
-                    self._state["unobserved_cliques"][i],
-                    self.K,
-                    self.h_dim,
+            if self.structure == "random_chain_graph_c3":
+                self._state["mask"][i] = np.array(
+                    get_chain_clique_selection_mask(
+                        self._state["gfn_state"][i],
+                        self.K,
+                        self.h_dim,
+                    )
                 )
-            )
+            elif self.structure == "random":
+                self._state["mask"][
+                    i
+                ] = np.array(  # FIXME: I think that there is a bug here when only the last h node is available for sampling
+                    get_clique_selection_mask(
+                        self._state["gfn_state"][i],
+                        self._state["unobserved_cliques"][i],
+                        self.K,
+                        self.h_dim,
+                    )
+                )
+            else:
+                raise ValueError("graph structure not supported.")
+
             assert np.all(
                 (
                     1 - self._state["gfn_state"][i][0][self._state["mask"][i] == 1]

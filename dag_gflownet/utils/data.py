@@ -257,30 +257,36 @@ def get_str_rep(nodes, model):
     return set([sorted(all_nodes)[n] for n in nodes])
 
 
-def get_chain_clique_selection_mask(
-    gfn_state: tuple, K: int, h_dim: int, clique_size=3
+def find_incomplete_clique(
+    observed, h_dim, necessary_has_incomplete_clique, clique_size=3
 ):
-    def find_incomplete_clique():
-        incomplete_clique_ix = -1
-        for i in range(h_dim // clique_size):
-            n_observed_vars = np.sum(
-                gfn_state[0][clique_size * i : clique_size * (i + 1)]
-            )
-            if n_observed_vars > 0 and n_observed_vars < clique_size:
-                incomplete_clique_ix = i
+    incomplete_clique_ix = -1
+    for i in range(h_dim // clique_size):
+        n_observed_vars = np.sum(observed[clique_size * i : clique_size * (i + 1)])
+        if n_observed_vars > 0 and n_observed_vars < clique_size:
+            incomplete_clique_ix = i
 
+    if necessary_has_incomplete_clique:
         assert (
             incomplete_clique_ix != -1
         )  # This function is only called when there is at least one incomplete clique
+        # so we assert for debugging purposes
 
-        incomplete_clique = {
-            node
-            for node in range(
-                clique_size * incomplete_clique_ix,
-                clique_size * (incomplete_clique_ix + 1),
-            )
-        }
-        return incomplete_clique
+    incomplete_clique = {
+        node
+        for node in range(
+            clique_size * incomplete_clique_ix,
+            clique_size * (incomplete_clique_ix + 1),
+        )
+    }
+    if incomplete_clique_ix == -1:
+        incomplete_clique = {}
+    return incomplete_clique
+
+
+def get_chain_clique_selection_mask(
+    gfn_state: tuple, K: int, h_dim: int, clique_size=3
+):
 
     assert len(gfn_state) == 3
     assert len(gfn_state[0]) == len(gfn_state[1])
@@ -300,7 +306,7 @@ def get_chain_clique_selection_mask(
     if num_latent_observed_vars % clique_size == 0:
         mask = 1 - gfn_state[0]
     else:
-        incomplete_clique = find_incomplete_clique()
+        incomplete_clique = find_incomplete_clique(gfn_state[0], h_dim, True)
 
         eligible_vars = incomplete_clique - set(observed_vars)
         eligible_vars = list(filter(lambda x: x < h_dim, eligible_vars))

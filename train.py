@@ -88,7 +88,7 @@ def main(args):
         K=args.K,
         graph=true_ugm,
         data=train_data,
-        structure=args.latent_structure
+        structure=args.latent_structure,
     )
 
     eval_env = GFlowNetDAGEnv(
@@ -100,6 +100,7 @@ def main(args):
         K=args.K,
         graph=true_ugm,
         data=eval_data,
+        structure=args.latent_structure,
     )
 
     # Create the replay buffer

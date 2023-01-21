@@ -18,7 +18,7 @@ from dag_gflownet.utils.gflownet import (
     detailed_balance_loss_free_energy_to_go,
 )
 from dag_gflownet.utils.jnp_utils import batch_random_choice
-from dag_gflownet.utils.data import get_value_policy_energy
+from dag_gflownet.utils.data import get_value_policy_energy, find_incomplete_clique
 from dag_gflownet.utils.jraph_utils import Graph
 
 GFlowNetParameters = namedtuple("GFlowNetParameters", ["clique_model", "value_model"])
@@ -140,11 +140,26 @@ class DAGGFlowNet:
 
         log_pf = nn.log_softmax(logits_value)[jnp.arange(bsz), samples["actions"][:, 1]]
         if self.pb == "uniform":
-            num_previous_states = self.get_num_valid_node_removals(
-                deepcopy(samples["next_observed"]), bsz
-            )
+            log_pb = jnp.zeros_like(log_pf)
+            for i in range(bsz):
+                num_next_observed_latent_vars = np.sum(
+                    samples["next_observed"][i][: self.h_dim]
+                )
+                incomplete_clique = find_incomplete_clique(
+                    samples["next_observed"][i], self.h_dim, False
+                )
+                if not incomplete_clique:
+                    log_pb = log_pb.at[i].set(-jnp.log(num_next_observed_latent_vars))
+                else:
+                    observed_latent_vars = set(
+                        np.nonzero(samples["next_observed"][i][: self.h_dim])[0]
+                    )
+                    observed_in_incomplete_clique = observed_latent_vars.intersection(
+                        incomplete_clique
+                    )
+                    num_active_vars = len(observed_in_incomplete_clique)
+                    log_pb = log_pb.at[i].set(-jnp.log(num_active_vars))
 
-            log_pb = -jnp.log(num_previous_states)
         elif self.pb == "deterministic":
             log_pb = jnp.zeros_like(log_pf)
         elif self.pb == "learnable":

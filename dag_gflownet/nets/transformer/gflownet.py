@@ -3,7 +3,6 @@ import haiku as hk
 from copy import deepcopy
 
 from dag_gflownet.nets.transformer.transformers import Transformer
-from dag_gflownet.utils.gflownet import mask_logits
 
 
 def clique_policy_transformer(
@@ -56,7 +55,6 @@ def clique_policy_transformer(
     temperature = hk.get_parameter("temperature", (), init=hk.initializers.Constant(1))
 
     logits = logits / temperature
-    logits = mask_logits(logits, masks)
 
     return logits
 

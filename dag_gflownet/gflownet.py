@@ -19,6 +19,7 @@ from dag_gflownet.nets.transformer.gflownet import (
 from dag_gflownet.utils.gflownet import (
     uniform_log_policy,
     detailed_balance_loss_free_energy_to_go,
+    mask_logits,
     MASKED_VALUE,
 )
 from dag_gflownet.utils.jnp_utils import batch_random_choice
@@ -252,6 +253,8 @@ class DAGGFlowNet:
             key_size=self.key_size,
             dropout_rate=self.dropout_rate,
         )
+
+        logits_clique = mask_logits(logits_clique, masks[:, : self.h_dim])
 
         # Get uniform policy
         # log_uniform = uniform_log_policy(masks)

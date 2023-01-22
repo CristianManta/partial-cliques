@@ -135,8 +135,7 @@ def main(args):
     params, state = gflownet.init(
         subkey,
         optimizer,
-        replay.dummy["graph"],
-        replay.dummy["observed"],
+        replay.dummy["graph"],        
         replay.dummy["values"],
         replay.dummy["mask"],
         args.x_dim,

@@ -117,7 +117,6 @@ class DAGGFlowNet:
         logits_clique = self.clique_model.apply(
             params.clique_model,
             forward_key_clique,
-            samples["observed"].astype("int"),
             samples["values"],
             samples["mask"],
             x_dim,
@@ -243,7 +242,6 @@ class DAGGFlowNet:
         logits_clique = self.clique_model.apply(
             params.clique_model,
             key,
-            observations["gfn_state"][0][0].reshape(1, -1),
             observations["gfn_state"][0][1].reshape(1, -1),
             masks,
             x_dim,
@@ -392,7 +390,7 @@ class DAGGFlowNet:
 
         return (params, state, logs, forward_key)
 
-    def init(self, key, optimizer, graph, obs, values, mask, x_dim, K):
+    def init(self, key, optimizer, graph, values, mask, x_dim, K):
         # Set the optimizer
         self._optimizer = optax.chain(optimizer, optax.zero_nans())
 
@@ -410,7 +408,6 @@ class DAGGFlowNet:
 
         clique_params = self.clique_model.init(
             key1,
-            obs,
             values,
             mask,
             x_dim,

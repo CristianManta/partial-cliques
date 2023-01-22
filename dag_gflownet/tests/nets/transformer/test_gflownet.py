@@ -60,7 +60,6 @@ def test_clique_policy_transformer(setup):
     model = hk.transform(clique_policy_transformer)
     params = model.init(
         key,
-        np.array([[0, 1]]),
         np.repeat(np.array(graphs.values.nodes).reshape(1, -1), batch_size, axis=0),
         masks,
         x_dim,
@@ -73,11 +72,10 @@ def test_clique_policy_transformer(setup):
     )
 
     # Applying the model
-    forward = jax.jit(model.apply, static_argnums=(5, 6, 7, 8, 9, 10, 11))
+    forward = jax.jit(model.apply, static_argnums=(4, 5, 6, 7, 8, 9, 10))
     logits = forward(
         params,
         next_key,
-        np.array([[0, 1]]),
         np.repeat(np.array(graphs.values.nodes).reshape(1, -1), batch_size, axis=0),
         masks,
         x_dim,

@@ -214,8 +214,7 @@ class ReplayBuffer:
         )
 
         return {
-            "graph": Graph(structure=structure_graph, values=value_graph),
-            "observed": np.zeros((1, self.num_variables), dtype=np.int),
+            "graph": Graph(structure=structure_graph, values=value_graph),            
             "values": np.zeros((1, self.num_variables), dtype=np.int),
             "value_energy": np.zeros((1, 1), dtype=np.float_),
             "clique_energy": np.zeros((1, 1), dtype=np.float_),

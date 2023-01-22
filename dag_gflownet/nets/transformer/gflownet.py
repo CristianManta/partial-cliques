@@ -7,7 +7,6 @@ from dag_gflownet.utils.gflownet import mask_logits
 
 
 def clique_policy_transformer(
-    observations_vector,
     values_vector,
     masks,
     x_dim,
@@ -44,10 +43,9 @@ def clique_policy_transformer(
         jnp.arange(num_variables)[jnp.newaxis, ...].repeat(batch_size, axis=0)
     )
     value_embeddings = value_embeddings_list(values_vector)
-    obs_embeddings = obs_embeddings_list(observations_vector)
 
     node_embeddings = jnp.reshape(
-        structural_embeddings + value_embeddings + obs_embeddings,
+        structural_embeddings + value_embeddings,
         (batch_size, -1, embed_dim),
     )
 

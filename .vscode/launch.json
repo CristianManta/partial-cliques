@@ -79,8 +79,7 @@
             "args": [
                 "--off_wandb",
                 "--pb",
-                "uniform",
-                "--partial_trajectories",
+                "deterministic",
                 "--num_eval_samples",
                 "10",
                 "--prefill",

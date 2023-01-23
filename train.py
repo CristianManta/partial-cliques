@@ -89,6 +89,7 @@ def main(args):
         graph=true_ugm,
         data=train_data,
         structure=args.latent_structure,
+        pb=args.pb,
     )
 
     eval_env = GFlowNetDAGEnv(
@@ -101,6 +102,7 @@ def main(args):
         graph=true_ugm,
         data=eval_data,
         structure=args.latent_structure,
+        pb=args.pb,
     )
 
     # Create the replay buffer
@@ -135,7 +137,7 @@ def main(args):
     params, state = gflownet.init(
         subkey,
         optimizer,
-        replay.dummy["graph"],        
+        replay.dummy["graph"],
         replay.dummy["values"],
         replay.dummy["mask"],
         args.x_dim,
@@ -454,14 +456,6 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Whether to use Wandb for logs (default: %(default)s)",
-    )
-
-    misc.add_argument(
-        "--partial_trajectories",
-        action="store_true",
-        default=False,
-        help="If this option is set, we only add the non terminal transitions to the replay buffer."
-        "(default: %(default)s)",
     )
 
     misc.add_argument(

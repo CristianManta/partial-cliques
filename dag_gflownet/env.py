@@ -27,6 +27,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         clique_potentials,
         data,
         structure,
+        pb,
     ):
         """GFlowNet environment for learning a distribution over DAGs.
 
@@ -58,6 +59,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
         self.clique_potentials = clique_potentials
         self.data = np.array(data)
         self.structure = structure
+        self.pb = pb
 
         # TODO: Change this to the appropriate obs space
         observation_space = Dict(
@@ -156,13 +158,23 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             self._state["gfn_state"][i] = new_gfn_state
 
             if self.structure == "random_chain_graph_c3":
-                self._state["mask"][i] = np.array(
-                    get_chain_clique_selection_mask(
-                        self._state["gfn_state"][i],
-                        self.K,
-                        self.h_dim,
+                if self.pb == "uniform":
+                    self._state["mask"][i] = np.array(
+                        get_chain_clique_selection_mask(
+                            self._state["gfn_state"][i],
+                            self.K,
+                            self.h_dim,
+                        )
                     )
-                )
+                elif self.pb == "deterministic":
+                    self._state["mask"][i] = np.array(
+                        get_clique_selection_mask(
+                            self._state["gfn_state"][i],
+                            self._state["unobserved_cliques"][i],
+                            self.K,
+                            self.h_dim,
+                        )
+                    )
             elif self.structure == "random":
                 self._state["mask"][
                     i

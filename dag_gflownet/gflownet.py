@@ -15,6 +15,7 @@ from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy, value_po
 from dag_gflownet.nets.transformer.gflownet import (
     value_policy_transformer,
     clique_policy_transformer,
+    random_clique_policy,
 )
 from dag_gflownet.utils.gflownet import (
     uniform_log_policy,
@@ -75,7 +76,7 @@ class DAGGFlowNet:
         self.full_cliques = full_cliques
 
         if self.pb == "uniform":
-            clique_model = clique_policy_transformer
+            clique_model = random_clique_policy
             self.clique_model = hk.transform(clique_model)
         elif self.pb == "deterministic":
             clique_model = clique_policy
@@ -122,24 +123,7 @@ class DAGGFlowNet:
         )
 
         if self.pb == "uniform":
-
-            logits_clique = self.clique_model.apply(
-                params.clique_model,
-                forward_key_clique,
-                samples["values"],
-                samples["mask"],
-                x_dim,
-                K,
-                embed_dim=self.embed_dim,
-                num_heads=self.num_heads,
-                num_layers=self.num_layers,
-                key_size=self.key_size,
-                dropout_rate=self.dropout_rate,
-            )
-
-            log_pf_clique = nn.log_softmax(logits_clique)[
-                jnp.arange(bsz), samples["actions"][:, 0]
-            ]
+            log_pf_clique = jnp.zeros((bsz,))
 
         elif self.pb == "deterministic":
             log_pf_clique = jnp.zeros((bsz,))
@@ -152,24 +136,6 @@ class DAGGFlowNet:
 
         if self.pb == "uniform":
             log_pb = jnp.zeros_like(log_pf)
-            for i in range(bsz):
-                num_next_observed_latent_vars = np.sum(
-                    samples["next_observed"][i][: self.h_dim]
-                )
-                incomplete_clique = find_incomplete_clique(
-                    samples["next_observed"][i], self.h_dim, False
-                )
-                if not incomplete_clique:
-                    log_pb = log_pb.at[i].set(-jnp.log(num_next_observed_latent_vars))
-                else:
-                    observed_latent_vars = set(
-                        np.nonzero(samples["next_observed"][i][: self.h_dim])[0]
-                    )
-                    observed_in_incomplete_clique = observed_latent_vars.intersection(
-                        incomplete_clique
-                    )
-                    num_active_vars = len(observed_in_incomplete_clique)
-                    log_pb = log_pb.at[i].set(-jnp.log(num_active_vars))
 
         elif self.pb == "deterministic":
             log_pb = jnp.zeros_like(log_pf)

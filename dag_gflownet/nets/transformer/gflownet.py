@@ -5,6 +5,28 @@ from copy import deepcopy
 from dag_gflownet.nets.transformer.transformers import Transformer
 
 
+def random_clique_policy(
+    values_vector,
+    masks,
+    x_dim,
+    K,
+    embed_dim,
+    num_heads,
+    num_layers,
+    key_size,
+    dropout_rate,
+):
+
+    assert K == 2
+
+    batch_size, num_variables = masks.shape
+    h_dim = num_variables - x_dim
+
+    logits = jnp.full((batch_size, h_dim), 1, dtype=float)
+
+    return logits
+
+
 def clique_policy_transformer(
     values_vector,
     masks,

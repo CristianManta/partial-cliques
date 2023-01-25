@@ -251,11 +251,13 @@ def main(args):
                     eval_full_trajectories = []
                     eval_logpf = []
                     eval_logz = []
+                    eval_logr = []
                     eval_log_marginal = []
                     eval_obs = eval_env.reset()
+                    logpf = 0.0
+                    logz = 0.0
+                    logr = 0.0
                     for _ in range(100):
-                        logpf = 0.0
-                        logz = 0.0
                         eval_obs["graphs_tuple"] = to_graphs_tuple(
                             full_cliques, eval_obs["gfn_state"], args.K, args.x_dim
                         )
@@ -271,11 +273,13 @@ def main(args):
                         eval_obs, energies, dones = eval_env.step(actions)
                         logpf += logs["logpf"]
                         logz += logs["logz"]
+                        logr += energies[1][0]
 
                         if dones[0][0]:
                             eval_full_trajectories.append(eval_obs["gfn_state"][0][1])
                             eval_logpf.append(logpf)
                             eval_logz.append(logz)
+                            eval_logr.append(logr)
                             eval_log_marginal.append(
                                 np.log(
                                     x_factors_values[
@@ -290,6 +294,8 @@ def main(args):
                             )
                             eval_obs = eval_env.reset()
                             logpf = 0.0
+                            logz = 0.0
+                            logr = 0.0
                     # calculate and print reverse KL
                     reverse_kl = gflownet.compute_reverse_kl(
                         full_observations=jnp.stack(eval_full_trajectories, axis=0),
@@ -298,11 +304,14 @@ def main(args):
                         log_marginal=jnp.array(eval_log_marginal),
                         ugm_model=true_ugm,
                     )
+                    logpx_lb = (-jnp.array(eval_logr) - jnp.array(eval_logpf)).mean()
+                    print(f"logpx_lb: {logpx_lb}")
                     print(f"Reverse KL: {reverse_kl}")
                     if not args.off_wandb:
                         wandb.log(
                             {
                                 "Reverse KL": reverse_kl,
+                                "logpx_lb": logpx_lb,
                             }
                         )
 

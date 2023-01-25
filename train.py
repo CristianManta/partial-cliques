@@ -63,6 +63,9 @@ def main(args):
         factors,
     ) = graph
 
+    np.save(f"train_data_h_dim_{args.h_dim}", train_data.to_numpy())
+    np.save(f"eval_data_h_dim_{args.h_dim}", eval_data.to_numpy())
+
     true_partition_fn = true_ugm.get_partition_function()
     obs_nodes = ["x" + str(i) for i in range(args.x_dim)]
     x_factors_values = factor_sum_product(
@@ -89,6 +92,7 @@ def main(args):
         graph=true_ugm,
         data=train_data,
         structure=args.latent_structure,
+        pb=args.pb,
     )
 
     eval_env = GFlowNetDAGEnv(
@@ -101,6 +105,7 @@ def main(args):
         graph=true_ugm,
         data=eval_data,
         structure=args.latent_structure,
+        pb=args.pb,
     )
 
     # Create the replay buffer
@@ -135,7 +140,7 @@ def main(args):
     params, state = gflownet.init(
         subkey,
         optimizer,
-        replay.dummy["graph"],        
+        replay.dummy["graph"],
         replay.dummy["values"],
         replay.dummy["mask"],
         args.x_dim,
@@ -158,6 +163,10 @@ def main(args):
     )
 
     traj_length = 0
+    random_max_traj_len = jax.random.randint(
+        key, (1,), 1, args.max_traj_length + 1
+    ).item()
+
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
             # Sample actions, execute them, and save transitions in the replay buffer
@@ -177,13 +186,18 @@ def main(args):
                 energies,
                 dones,
             )
+            traj_length += 1
 
-            if dones[0][0] or traj_length >= args.max_traj_length:
+            if dones[0][0] or traj_length >= random_max_traj_len:
                 observations = env.reset()
                 traj_length = 0
+
+                random_max_traj_len = jax.random.randint(
+                    key, (1,), 1, args.max_traj_length + 1
+                ).item()
+
             else:
                 observations = next_observations
-                traj_length += 1
 
             if iteration >= args.prefill:
                 # Update the parameters of the GFlowNet
@@ -454,14 +468,6 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Whether to use Wandb for logs (default: %(default)s)",
-    )
-
-    misc.add_argument(
-        "--partial_trajectories",
-        action="store_true",
-        default=False,
-        help="If this option is set, we only add the non terminal transitions to the replay buffer."
-        "(default: %(default)s)",
     )
 
     misc.add_argument(

@@ -59,11 +59,6 @@ class DAGGFlowNet:
         full_cliques=None,
     ):
 
-        clique_model = clique_policy_transformer
-        value_model = value_policy_transformer
-
-        self.clique_model = hk.transform(clique_model)
-        self.value_model = hk.transform(value_model)
         self.delta = delta
         self.x_dim = x_dim
         self.h_dim = h_dim
@@ -78,6 +73,17 @@ class DAGGFlowNet:
         self.dropout_rate = dropout_rate
         self.pb = pb
         self.full_cliques = full_cliques
+
+        if self.pb == "uniform":
+            clique_model = clique_policy_transformer
+            self.clique_model = hk.transform(clique_model)
+        elif self.pb == "deterministic":
+            clique_model = clique_policy
+            self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
+
+        value_model = value_policy_transformer
+
+        self.value_model = hk.transform(value_model)
 
     def loss(
         self, params, samples, x_dim, K, forward_key
@@ -115,25 +121,31 @@ class DAGGFlowNet:
             dropout_rate=self.dropout_rate,
         )
 
-        logits_clique = self.clique_model.apply(
-            params.clique_model,
-            forward_key_clique,
-            samples["values"],
-            samples["mask"],
-            x_dim,
-            K,
-            embed_dim=self.embed_dim,
-            num_heads=self.num_heads,
-            num_layers=self.num_layers,
-            key_size=self.key_size,
-            dropout_rate=self.dropout_rate,
-        )
+        if self.pb == "uniform":
+
+            logits_clique = self.clique_model.apply(
+                params.clique_model,
+                forward_key_clique,
+                samples["values"],
+                samples["mask"],
+                x_dim,
+                K,
+                embed_dim=self.embed_dim,
+                num_heads=self.num_heads,
+                num_layers=self.num_layers,
+                key_size=self.key_size,
+                dropout_rate=self.dropout_rate,
+            )
+
+            log_pf_clique = nn.log_softmax(logits_clique)[
+                jnp.arange(bsz), samples["actions"][:, 0]
+            ]
+
+        elif self.pb == "deterministic":
+            log_pf_clique = jnp.zeros((bsz,))
 
         log_pf_value = nn.log_softmax(logits_value)[
             jnp.arange(bsz), samples["actions"][:, 1]
-        ]
-        log_pf_clique = nn.log_softmax(logits_clique)[
-            jnp.arange(bsz), samples["actions"][:, 0]
         ]
 
         log_pf = log_pf_value + log_pf_clique
@@ -232,29 +244,45 @@ class DAGGFlowNet:
 
         # First get the clique policy
         if self.pb == "uniform":
-            sampling_method = 3
+
+            logits_clique = self.clique_model.apply(
+                params.clique_model,
+                key,
+                observations["gfn_state"][0][1].reshape(1, -1),
+                masks,
+                x_dim,
+                K,
+                embed_dim=self.embed_dim,
+                num_heads=self.num_heads,
+                num_layers=self.num_layers,
+                key_size=self.key_size,
+                dropout_rate=self.dropout_rate,
+            )
+
+            logits_clique = mask_logits(logits_clique, masks[:, : self.h_dim])
+            clique_actions = jax.random.categorical(subkey1, logits_clique)  # / 999
+
+            clique_actions = jnp.where(
+                jnp.all(logits_clique == MASKED_VALUE, axis=-1),
+                self.h_dim,
+                clique_actions,
+            )  # h_dim means stop action.
+            # Only output the stop action when there is no other available action
+
         elif self.pb == "deterministic":
-            sampling_method = 2
+
+            log_probs_clique = self.clique_model.apply(
+                params.clique_model, graphs, masks, x_dim, K, sampling_method=2
+            )
+
+            clique_actions = jax.random.categorical(
+                subkey1, log_probs_clique / 999
+            )  # a single integer between 0 and h_dim
+
         elif self.pb == "learnable":
             raise NotImplementedError()
         else:
             raise ValueError("Invalid pb choice")
-
-        logits_clique = self.clique_model.apply(
-            params.clique_model,
-            key,
-            observations["gfn_state"][0][1].reshape(1, -1),
-            masks,
-            x_dim,
-            K,
-            embed_dim=self.embed_dim,
-            num_heads=self.num_heads,
-            num_layers=self.num_layers,
-            key_size=self.key_size,
-            dropout_rate=self.dropout_rate,
-        )
-
-        logits_clique = mask_logits(logits_clique, masks[:, : self.h_dim])
 
         # Get uniform policy
         # log_uniform = uniform_log_policy(masks)
@@ -266,14 +294,6 @@ class DAGGFlowNet:
 
         # Sample actions
         # clique_policy_actions = batch_random_choice(subkey2, jnp.exp(log_probs_clique), masks)
-        clique_actions = jax.random.categorical(
-            subkey1, logits_clique  # / 999
-        )  # a single integer between 0 and h_dim
-
-        clique_actions = jnp.where(
-            jnp.all(logits_clique == MASKED_VALUE, axis=-1), self.h_dim, clique_actions
-        )  # h_dim means stop action.
-        # Only output the stop action when there is no other available action
 
         """
         if clique_actions == self.h_dim:
@@ -401,26 +421,31 @@ class DAGGFlowNet:
         key1, key2 = random.split(key, 2)
 
         if self.pb == "uniform":
-            sampling_method = 3
+
+            clique_params = self.clique_model.init(
+                key1,
+                values,
+                mask,
+                x_dim,
+                K,
+                embed_dim=self.embed_dim,
+                num_heads=self.num_heads,
+                num_layers=self.num_layers,
+                key_size=self.key_size,
+                dropout_rate=self.dropout_rate,
+            )
+
         elif self.pb == "deterministic":
-            sampling_method = 2
+
+            clique_params = self.clique_model.init(
+                key1, graph, mask, x_dim, K, sampling_method=2
+            )
+
         elif self.pb == "learnable":
             raise NotImplementedError()
         else:
             raise ValueError("Invalid pb choice")
 
-        clique_params = self.clique_model.init(
-            key1,
-            values,
-            mask,
-            x_dim,
-            K,
-            embed_dim=self.embed_dim,
-            num_heads=self.num_heads,
-            num_layers=self.num_layers,
-            key_size=self.key_size,
-            dropout_rate=self.dropout_rate,
-        )
         value_params = self.value_model.init(
             key2,
             values,

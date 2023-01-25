@@ -247,7 +247,7 @@ def get_energy_fns(model: MarkovNetwork, full_cliques: list):
 
 def get_index_rep(nodes, model):
     all_nodes = [n for n in model.nodes]
-    index = set([sorted(all_nodes).index(n) for n in nodes])
+    index = set([all_nodes.index(n) for n in nodes])
     nodes = [all_nodes[i] for i in list(index)]
     return index, nodes
 

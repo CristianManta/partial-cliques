@@ -63,6 +63,9 @@ def main(args):
         factors,
     ) = graph
 
+    np.save(f"train_data_h_dim_{args.h_dim}", train_data.to_numpy())
+    np.save(f"eval_data_h_dim_{args.h_dim}", eval_data.to_numpy())
+
     true_partition_fn = true_ugm.get_partition_function()
     obs_nodes = ["x" + str(i) for i in range(args.x_dim)]
     x_factors_values = factor_sum_product(

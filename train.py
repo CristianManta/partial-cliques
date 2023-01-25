@@ -129,6 +129,7 @@ def main(args):
         dropout_rate=args.dropout_rate,
         pb=args.pb,
         full_cliques=full_cliques,
+        loss=args.loss,
     )
     if args.optimizer == "adam":
         optimizer = optax.adam(args.lr)
@@ -404,6 +405,13 @@ if __name__ == "__main__":
         type=str,
         default="sgd",
         help="optimizer name. Choices: sgd or adam (default: %(default)s)",
+    )
+
+    optimization.add_argument(
+        "--loss",
+        type=str,
+        default="partial",
+        help="Which loss to use. Choices: partial or db (default: %(default)s)",
     )
 
     # Replay buffer

@@ -28,6 +28,7 @@ class ReplayBuffer:
                 ("is_exploration", np.bool_, (1,)),
                 ("done", np.bool_, (1,)),
                 ("value_energies", np.float_, (1,)),
+                ("cum_value_energies", np.float_, (1,)),
                 ("var_energies", np.float_, (1,)),
                 ("mask", np.bool, (num_variables,)),
                 ("next_mask", np.bool, (num_variables,)),
@@ -52,13 +53,25 @@ class ReplayBuffer:
     ):
 
         (var_energies, value_energies) = energies
+        # print(value_energies)
 
         bsz = len(observations["gfn_state"])
 
         for i in range(bsz):
+            # FIXME: WARNING: The logic with adding cumulative energies only works for the case bsz=1
+            assert bsz == 1
 
             # num_samples = np.sum(~dones)
             add_idx = self._index
+
+            prev_idx = (add_idx - 1) % self.capacity
+            prev_cum_value_energies = self._replay["cum_value_energies"][prev_idx]
+            current_cum_value_energies = prev_cum_value_energies + np.array(
+                value_energies
+            )
+            if dones[0][0]:
+                current_cum_value_energies = np.array([0], dtype=float)
+
             self._index = (self._index + 1) % self.capacity
             self._is_full |= self._index == self.capacity - 1
             # self._index = (self._index + num_samples) % self.capacity
@@ -75,6 +88,7 @@ class ReplayBuffer:
                 "actions": actions[i],
                 "var_energies": np.array([var_energies[i]]),
                 "value_energies": np.array([value_energies[i]]),
+                "cum_value_energies": np.array([current_cum_value_energies[i]]),
                 "mask": observations["mask"][i],
                 "next_mask": next_observations["mask"][i],
             }
@@ -103,6 +117,7 @@ class ReplayBuffer:
         dones = [sample["done"] for sample in samples]
         var_energies = [sample["var_energies"] for sample in samples]
         value_energies = [sample["value_energies"] for sample in samples]
+        cum_value_energies = [sample["cum_value_energies"] for sample in samples]
         next_gfn_state = [
             (sample["next_observed"], sample["next_values"], sample["next_cashed"])
             for sample in samples
@@ -142,6 +157,7 @@ class ReplayBuffer:
             "dones": np.stack(dones, axis=0),
             "var_energies": np.stack(var_energies, axis=0),
             "value_energies": np.stack(value_energies, axis=0),
+            "cum_value_energies": np.stack(cum_value_energies, axis=0),
             "mask": np.stack(mask, axis=0),
             "next_mask": np.stack(next_mask),
         }

@@ -16,17 +16,17 @@ def mask_logits(logits, masks):
 
 
 def detailed_balance_loss(
-    log_pi_t, log_pi_tp1, actions, delta_scores, num_edges, delta=1.0
+    log_fetg_t,
+    log_fetg_tp1,
+    log_pf,
+    log_pb,
+    delta=1.0,
+    reduction="mean",
 ):
-    r"""Detailed balance loss.
+    r"""Detailed balance loss using free energy to go.
 
     This function computes the detailed balance loss, in the specific case
-    where all the states are complete. This loss function is given by:
-
-    $$ L(\theta; s_{t}, s_{t+1}) = \left[\log\frac{
-        R(s_{t+1})P_{B}(s_{t} \mid s_{t+1})P_{\theta}(s_{f} \mid s_{t})}{
-        R(s_{t})P_{\theta}(s_{t+1} \mid s_{t})P_{\theta}(s_{f} \mid s_{t+1})
-    }\right]^{2} $$
+    where the energy is decomposable and we never terminate.
 
     In practice, to avoid gradient explosion, we use the Huber loss instead
     of the L2-loss (the L2-loss can be emulated with a large value of delta).
@@ -35,31 +35,19 @@ def detailed_balance_loss(
 
     Parameters
     ----------
-    log_pi_t : jnp.DeviceArray
-        The log-probabilities $\log P_{\theta}(s' \mid s_{t})$, for all the
-        next states $s'$, including the terminal state $s_{f}$. This array
-        has size `(B, N ** 2 + 1)`, where `B` is the batch-size, and `N` is
-        the number of variables in a graph.
+    log_fetg_t : jnp.DeviceArray
+        The log free-energy-to-go for state $s_t$. This array
+        has size `(B, 1)`, where `B` is the batch-size.
 
-    log_pi_tp1 : jnp.DeviceArray
-        The log-probabilities $\log P_{\theta}(s' \mid s_{t+1})$, for all the
-        next states $s'$, including the terminal state $s_{f}$. This array
-        has size `(B, N ** 2 + 1)`, where `B` is the batch-size, and `N` is
-        the number of variables in a graph. In practice, `log_pi_tp1` is
-        computed using a target network with parameters $\theta'$.
+    log_fetg_tp1 : jnp.DeviceArray
+        The log free-energy-to-go for state $s_{t+1}$ This array
+        has size `(B, 1)`, where `B` is the batch-size.
 
-    actions : jnp.DeviceArray
-        The actions taken to go from state $s_{t}$ to state $s_{t+1}$. This
-        array has size `(B, 1)`, where `B` is the batch-size.
+    log_pf : jnp.DeviceArray
+        log P_{\theta}(s_{t+1} \mid s_{t})
 
-    delta_scores : jnp.DeviceArray
-        The delta-scores between state $s_{t}$ and state $s_{t+1}$, given by
-        $\log R(s_{t+1}) - \log R(s_{t})$. This array has size `(B, 1)`, where
-        `B` is the batch-size.
-
-    num_edges : jnp.DeviceArray
-        The number of edges in $s_{t}$. This array has size `(B, 1)`, where `B`
-        is the batch-size.
+    log_pb : jnp.DeviceArray
+        log P_{\theta}(s_{t} \mid s_{t+1})
 
     delta : float (default: 1.)
         The value of delta for the Huber loss.
@@ -72,19 +60,13 @@ def detailed_balance_loss(
     logs : dict
         Additional information for logging purposes.
     """
-    # Compute the forward log-probabilities
-    log_pF = jnp.take_along_axis(log_pi_t, actions, axis=-1)
-
-    # Compute the backward log-probabilities
-    log_pB = -jnp.log1p(num_edges)
-
-    error = (
-        jnp.squeeze(delta_scores + log_pB - log_pF, axis=-1)
-        + log_pi_t[:, -1]
-        - log_pi_tp1[:, -1]
-    )
-    loss = jnp.mean(optax.huber_loss(error, delta=delta))
-
+    error = log_fetg_t - log_fetg_tp1 + log_pf - log_pb
+    if reduction == "mean":
+        loss = jnp.mean(optax.huber_loss(error, delta=delta))
+    else:
+        loss = optax.huber_loss(error, delta=delta)
+    # if loss > 100:
+    #    breakpoint()
     logs = {
         "error": error,
         "loss": loss,

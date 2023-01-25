@@ -20,6 +20,7 @@ from dag_gflownet.nets.transformer.gflownet import (
 from dag_gflownet.utils.gflownet import (
     uniform_log_policy,
     detailed_balance_loss_free_energy_to_go,
+    detailed_balance_loss,
     mask_logits,
     MASKED_VALUE,
 )
@@ -58,6 +59,7 @@ class DAGGFlowNet:
         dropout_rate=0.0,
         pb="uniform",
         full_cliques=None,
+        loss=None,
     ):
 
         self.delta = delta
@@ -74,6 +76,7 @@ class DAGGFlowNet:
         self.dropout_rate = dropout_rate
         self.pb = pb
         self.full_cliques = full_cliques
+        self.loss_fn = loss
 
         if self.pb == "uniform":
             clique_model = random_clique_policy
@@ -181,16 +184,36 @@ class DAGGFlowNet:
 
         value_energies = samples["value_energies"]
         fetg_tp1_done = samples["next_observed"].all(axis=-1)
+        fetg_t_done = samples["observed"].all(axis=-1)
         log_fetg_tp1 = jnp.where(fetg_tp1_done, 0, log_fetg_tp1)
-        unfiltered_loss, logs = detailed_balance_loss_free_energy_to_go(
-            log_fetg_t=log_fetg_t,
-            log_fetg_tp1=log_fetg_tp1,
-            log_pf=log_pf,
-            log_pb=log_pb,
-            partial_energies=value_energies,
-            delta=self.delta,
-            reduction="none",
-        )
+        if self.loss_fn == "partial":
+            unfiltered_loss, logs = detailed_balance_loss_free_energy_to_go(
+                log_fetg_t=log_fetg_t,
+                log_fetg_tp1=log_fetg_tp1,
+                log_pf=log_pf,
+                log_pb=log_pb,
+                partial_energies=value_energies,
+                delta=self.delta,
+                reduction="none",
+            )
+        elif self.loss_fn == "db":
+            terminating_transitions = fetg_tp1_done & (~fetg_t_done)
+            log_fetg_tp1 = jnp.where(
+                terminating_transitions,
+                jnp.squeeze(samples["cum_value_energies"], axis=-1),
+                log_fetg_tp1,
+            )  # Replacing the terminal states F(s') by the rewards
+
+            unfiltered_loss, logs = detailed_balance_loss(
+                log_fetg_t=log_fetg_t,
+                log_fetg_tp1=log_fetg_tp1,
+                log_pf=log_pf,
+                log_pb=log_pb,
+                delta=self.delta,
+                reduction="none",
+            )
+        else:
+            raise ValueError("Invalid loss choice")
 
         loss = jnp.where(
             samples["dones"].squeeze(axis=-1), 0, unfiltered_loss

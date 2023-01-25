@@ -163,12 +163,15 @@ def main(args):
     )
 
     traj_length = 0
-    random_max_traj_len = jax.random.randint(
-        key, (1,), 1, args.max_traj_length + 1
-    ).item()
-
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
+
+            if traj_length >= args.max_traj_length:
+                observations = env.reset()
+                traj_length = 0
+
+            traj_length += 1
+
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
             observations["graphs_tuple"] = to_graphs_tuple(
@@ -186,15 +189,10 @@ def main(args):
                 energies,
                 dones,
             )
-            traj_length += 1
 
-            if dones[0][0] or traj_length >= random_max_traj_len:
+            if dones[0][0]:
                 observations = env.reset()
                 traj_length = 0
-
-                random_max_traj_len = jax.random.randint(
-                    key, (1,), 1, args.max_traj_length + 1
-                ).item()
 
             else:
                 observations = next_observations

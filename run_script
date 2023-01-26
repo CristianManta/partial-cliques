@@ -54,65 +54,65 @@ echo 'Submitting SBATCH jobs...'
 #   done
 # done
 
-loss=partial
+for loss in ${losses[@]}
+do
+    # 6 latents
+    echo "#!/bin/bash" >> temprun.sh
+    echo "#SBATCH --partition=long"  >> temprun.sh
+    echo "#SBATCH --cpus-per-task=2" >> temprun.sh
+    echo "#SBATCH --gres=gpu:48gb:1" >> temprun.sh
+    echo "#SBATCH --mem=48G" >> temprun.sh
+    echo "#SBATCH --time=9:59:00 " >>  temprun.sh
+    echo "#SBATCH -o /home/mila/c/cristian-dragos.manta/projects/partial-cliques/slurm-%j.out" >> temprun.sh
 
-# 6 latents
-echo "#!/bin/bash" >> temprun.sh
-echo "#SBATCH --partition=long"  >> temprun.sh
-echo "#SBATCH --cpus-per-task=2" >> temprun.sh
-echo "#SBATCH --gres=gpu:48gb:1" >> temprun.sh
-echo "#SBATCH --mem=48G" >> temprun.sh
-echo "#SBATCH --time=9:59:00 " >>  temprun.sh
-echo "#SBATCH -o /home/mila/c/cristian-dragos.manta/projects/partial-cliques/slurm-%j.out" >> temprun.sh
+    echo "module load cuda/11.1/cudnn/8.1" >> temprun.sh
+    echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> temprun.sh
+    echo "conda activate dag-gfn" >> temprun.sh
+    echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
 
-echo "module load cuda/11.1/cudnn/8.1" >> temprun.sh
-echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> temprun.sh
-echo "conda activate dag-gfn" >> temprun.sh
-echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
+    echo "python train.py --loss ${loss} --latent_structure random_chain_graph_c3 --pb uniform --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 3 --h_dim 6 --K 2 --seed 0 --log_every 10 --lr 0.03" >> temprun.sh
 
-echo "python train.py --max_traj_length 5 --loss ${loss} --latent_structure random_chain_graph_c3 --pb uniform --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 3 --h_dim 6 --K 2 --seed 0 --log_every 10 --lr 0.03" >> temprun.sh
+    eval "sbatch temprun.sh"
+    rm temprun.sh
 
-eval "sbatch temprun.sh"
-rm temprun.sh
+    # 9 latents
+    echo "#!/bin/bash" >> temprun.sh
+    echo "#SBATCH --partition=long"  >> temprun.sh
+    echo "#SBATCH --cpus-per-task=2" >> temprun.sh
+    echo "#SBATCH --gres=gpu:48gb:1" >> temprun.sh
+    echo "#SBATCH --mem=48G" >> temprun.sh
+    echo "#SBATCH --time=9:59:00 " >>  temprun.sh
+    echo "#SBATCH -o /home/mila/c/cristian-dragos.manta/projects/partial-cliques/slurm-%j.out" >> temprun.sh
 
-# 9 latents
-echo "#!/bin/bash" >> temprun.sh
-echo "#SBATCH --partition=long"  >> temprun.sh
-echo "#SBATCH --cpus-per-task=2" >> temprun.sh
-echo "#SBATCH --gres=gpu:48gb:1" >> temprun.sh
-echo "#SBATCH --mem=48G" >> temprun.sh
-echo "#SBATCH --time=9:59:00 " >>  temprun.sh
-echo "#SBATCH -o /home/mila/c/cristian-dragos.manta/projects/partial-cliques/slurm-%j.out" >> temprun.sh
+    echo "module load cuda/11.1/cudnn/8.1" >> temprun.sh
+    echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> temprun.sh
+    echo "conda activate dag-gfn" >> temprun.sh
+    echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
 
-echo "module load cuda/11.1/cudnn/8.1" >> temprun.sh
-echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> temprun.sh
-echo "conda activate dag-gfn" >> temprun.sh
-echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
+    echo "python train.py --loss ${loss} --latent_structure random_chain_graph_c3 --pb uniform --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 5 --h_dim 9 --K 2 --seed 0 --log_every 10 --lr 0.03" >> temprun.sh
 
-echo "python train.py --max_traj_length 8 --loss ${loss} --latent_structure random_chain_graph_c3 --pb uniform --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 5 --h_dim 9 --K 2 --seed 0 --log_every 10 --lr 0.03" >> temprun.sh
+    eval "sbatch temprun.sh"
+    rm temprun.sh
 
-eval "sbatch temprun.sh"
-rm temprun.sh
+    # 12 latents
+    echo "#!/bin/bash" >> temprun.sh
+    echo "#SBATCH --partition=long"  >> temprun.sh
+    echo "#SBATCH --cpus-per-task=2" >> temprun.sh
+    echo "#SBATCH --gres=gpu:48gb:1" >> temprun.sh
+    echo "#SBATCH --mem=48G" >> temprun.sh
+    echo "#SBATCH --time=9:59:00 " >>  temprun.sh
+    echo "#SBATCH -o /home/mila/c/cristian-dragos.manta/projects/partial-cliques/slurm-%j.out" >> temprun.sh
 
-# 12 latents
-echo "#!/bin/bash" >> temprun.sh
-echo "#SBATCH --partition=long"  >> temprun.sh
-echo "#SBATCH --cpus-per-task=2" >> temprun.sh
-echo "#SBATCH --gres=gpu:48gb:1" >> temprun.sh
-echo "#SBATCH --mem=48G" >> temprun.sh
-echo "#SBATCH --time=9:59:00 " >>  temprun.sh
-echo "#SBATCH -o /home/mila/c/cristian-dragos.manta/projects/partial-cliques/slurm-%j.out" >> temprun.sh
+    echo "module load cuda/11.1/cudnn/8.1" >> temprun.sh
+    echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> temprun.sh
+    echo "conda activate dag-gfn" >> temprun.sh
+    echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
 
-echo "module load cuda/11.1/cudnn/8.1" >> temprun.sh
-echo "source /home/mila/c/cristian-dragos.manta/anaconda3/bin/activate" >> temprun.sh
-echo "conda activate dag-gfn" >> temprun.sh
-echo "export PYTHONPATH=${PYTHONPATH}:/home/mila/c/cristian-dragos.manta/projects/partial-cliques" >> temprun.sh
+    echo "python train.py --loss ${loss} --latent_structure random_chain_graph_c3 --pb uniform --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 7 --h_dim 12 --K 2 --seed 0 --log_every 10 --lr 0.03" >> temprun.sh
 
-echo "python train.py --max_traj_length 11 --loss ${loss} --latent_structure random_chain_graph_c3 --pb uniform --optimizer sgd --embed_dim 256 --num_heads 4 --num_layers 6 --key_size 64 --num_eval_samples 10 --prefill 500 --num_iterations 5000 --batch_size 32 --num_samples 100 --x_dim 7 --h_dim 12 --K 2 --seed 0 --log_every 10 --lr 0.03" >> temprun.sh
-
-eval "sbatch temprun.sh"
-rm temprun.sh
-
+    eval "sbatch temprun.sh"
+    rm temprun.sh
+done
 
 
 # 15 latents -> OOM

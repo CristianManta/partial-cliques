@@ -304,7 +304,7 @@ def main(args):
                         log_marginal=jnp.array(eval_log_marginal),
                         ugm_model=true_ugm,
                     )
-                    logpx_lb = (jnp.array(eval_logr) - jnp.array(eval_logpf)).mean()
+                    logpx_lb = (-jnp.array(eval_logr) - jnp.array(eval_logpf)).mean()
                     print(f"logpx_lb: {logpx_lb}")
                     print(f"Reverse KL: {reverse_kl}")
                     if not args.off_wandb:

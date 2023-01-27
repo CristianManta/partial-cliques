@@ -158,7 +158,7 @@ class GFlowNetDAGEnv(gym.vector.VectorEnv):
             self._state["gfn_state"][i] = new_gfn_state
 
             if self.structure == "random_chain_graph_c3":
-                if self.pb == "uniform":
+                if self.pb in ["uniform", "stochastic_env"]:
                     self._state["mask"][i] = np.array(
                         get_chain_clique_selection_mask(
                             self._state["gfn_state"][i],

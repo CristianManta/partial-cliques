@@ -129,6 +129,7 @@ def main(args):
         dropout_rate=args.dropout_rate,
         pb=args.pb,
         full_cliques=full_cliques,
+        loss=args.loss,
     )
     if args.optimizer == "adam":
         optimizer = optax.adam(args.lr)
@@ -163,12 +164,15 @@ def main(args):
     )
 
     traj_length = 0
-    random_max_traj_len = jax.random.randint(
-        key, (1,), 1, args.max_traj_length + 1
-    ).item()
-
     with trange(args.prefill + args.num_iterations, desc="Training") as pbar:
         for iteration in pbar:
+
+            if traj_length >= args.max_traj_length:
+                observations = env.reset()
+                traj_length = 0
+
+            traj_length += 1
+
             # Sample actions, execute them, and save transitions in the replay buffer
             epsilon = exploration_schedule(iteration)
             observations["graphs_tuple"] = to_graphs_tuple(
@@ -186,15 +190,10 @@ def main(args):
                 energies,
                 dones,
             )
-            traj_length += 1
 
-            if dones[0][0] or traj_length >= random_max_traj_len:
+            if dones[0][0]:
                 observations = env.reset()
                 traj_length = 0
-
-                random_max_traj_len = jax.random.randint(
-                    key, (1,), 1, args.max_traj_length + 1
-                ).item()
 
             else:
                 observations = next_observations
@@ -258,6 +257,7 @@ def main(args):
                     logz = 0.0
                     logr = 0.0
                     for _ in range(100):
+
                         eval_obs["graphs_tuple"] = to_graphs_tuple(
                             full_cliques, eval_obs["gfn_state"], args.K, args.x_dim
                         )
@@ -371,9 +371,40 @@ def main(args):
     # wandb.save('posterior.npy', policy='now')
 
 
+def guard_arguments(args, choices):
+    """
+    Put here all the checks to exclude incompatible arguments
+    """
+    args_dict = vars(args)
+    for key, value in choices.items():
+        assert args_dict[key] in value
+
+    if args.loss == "db" and args.max_traj_length < args.h_dim:
+        raise ValueError(
+            f"loss = {args.loss} incompatible with max_traj_length < args.h_dim. "
+            "This is because the replay.add function will not see the dones flags and "
+            "it will keep adding energies across different trajectories."
+        )
+
+    if args.latent_structure == "random_chain_graph_c3":
+        assert args.h_dim % 3 == 0
+        assert args.x_dim == 2 * int(args.h_dim / 3) - 1
+
+    assert args.K == 2  # Other values might have unpredictable consequences
+
+
 if __name__ == "__main__":
     from argparse import ArgumentParser
     import json
+
+    # To better keep track of which options are implemented and which are not
+    # without having to write assert statements all over the place in the codebase
+    choices = {
+        "pb": ["uniform", "deterministic", "stochastic_env"],
+        "optimizer": ["sgd", "adam"],
+        "loss": ["partial", "db"],
+        "latent_structure": ["random", "random_chain_graph_c3"],
+    }
 
     parser = ArgumentParser(description="DAG-GFlowNet for Strucure Learning.")
 
@@ -414,7 +445,14 @@ if __name__ == "__main__":
         "--optimizer",
         type=str,
         default="sgd",
-        help="optimizer name. Choices: sgd or adam (default: %(default)s)",
+        help=f"optimizer name. Choices: {', '.join(choices['optimizer'])} (default: %(default)s)",
+    )
+
+    optimization.add_argument(
+        "--loss",
+        type=str,
+        default="partial",
+        help=f"Which loss to use. Choices: {', '.join(choices['loss'])} (default: %(default)s)",
     )
 
     # Replay buffer
@@ -485,10 +523,13 @@ if __name__ == "__main__":
         default="uniform",
         help=(
             "backwards probability parametrization. "
-            "Choices: uniform, learnable or deterministic. (default: %(default)s). "
+            f"Choices: {', '.join(choices['pb'])}. (default: %(default)s). "
             "If the deterministic option is chosen, log_pb will be 0 and "
             "the clique policy will simply sample all the latent variables "
-            "in increasing order of their index."
+            "in increasing order of their index. The stochastic_env choice "
+            "means that the clique policy will not learn any P_F and will "
+            "sample randomly under the mask constraints, while still keeping a log pb of 0, which is normally"
+            "only typical for deterministic pb."
         ),
     )
 
@@ -524,7 +565,7 @@ if __name__ == "__main__":
         "--latent_structure",
         type=str,
         default="random",
-        help="type of graph. For now, choices are random or random_chain_graph_c3 (default: %(default)s)",
+        help=f"type of graph. Choices are {', '.join(choices['latent_structure'])} (default: %(default)s)",
     )
 
     transformer_args = parser.add_argument_group("Transformer")
@@ -557,5 +598,5 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
+    guard_arguments(args, choices)
     main(args)

@@ -15,10 +15,12 @@ from dag_gflownet.nets.gnn.gflownet import clique_policy, value_policy, value_po
 from dag_gflownet.nets.transformer.gflownet import (
     value_policy_transformer,
     clique_policy_transformer,
+    random_clique_policy,
 )
 from dag_gflownet.utils.gflownet import (
     uniform_log_policy,
     detailed_balance_loss_free_energy_to_go,
+    detailed_balance_loss,
     mask_logits,
     MASKED_VALUE,
 )
@@ -57,6 +59,7 @@ class DAGGFlowNet:
         dropout_rate=0.0,
         pb="uniform",
         full_cliques=None,
+        loss=None,
     ):
 
         self.delta = delta
@@ -73,13 +76,17 @@ class DAGGFlowNet:
         self.dropout_rate = dropout_rate
         self.pb = pb
         self.full_cliques = full_cliques
+        self.loss_fn = loss
 
-        if self.pb == "uniform":
-            clique_model = clique_policy_transformer
+        if self.pb == "stochastic_env":
+            clique_model = random_clique_policy
             self.clique_model = hk.transform(clique_model)
         elif self.pb == "deterministic":
             clique_model = clique_policy
             self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
+        elif self.pb == "uniform":
+            clique_model = clique_policy_transformer
+            self.clique_model = hk.transform(clique_model)
 
         value_model = value_policy_transformer
 
@@ -121,8 +128,13 @@ class DAGGFlowNet:
             dropout_rate=self.dropout_rate,
         )
 
-        if self.pb == "uniform":
+        if self.pb == "stochastic_env":
+            log_pf_clique = jnp.zeros((bsz,))
 
+        elif self.pb == "deterministic":
+            log_pf_clique = jnp.zeros((bsz,))
+
+        elif self.pb == "uniform":
             logits_clique = self.clique_model.apply(
                 params.clique_model,
                 forward_key_clique,
@@ -141,16 +153,19 @@ class DAGGFlowNet:
                 jnp.arange(bsz), samples["actions"][:, 0]
             ]
 
-        elif self.pb == "deterministic":
-            log_pf_clique = jnp.zeros((bsz,))
-
         log_pf_value = nn.log_softmax(logits_value)[
             jnp.arange(bsz), samples["actions"][:, 1]
         ]
 
         log_pf = log_pf_value + log_pf_clique
 
-        if self.pb == "uniform":
+        if self.pb == "stochastic_env":
+            log_pb = jnp.zeros_like(log_pf)
+
+        elif self.pb == "deterministic":
+            log_pb = jnp.zeros_like(log_pf)
+
+        elif self.pb == "uniform":
             log_pb = jnp.zeros_like(log_pf)
             for i in range(bsz):
                 num_next_observed_latent_vars = np.sum(
@@ -170,13 +185,6 @@ class DAGGFlowNet:
                     )
                     num_active_vars = len(observed_in_incomplete_clique)
                     log_pb = log_pb.at[i].set(-jnp.log(num_active_vars))
-
-        elif self.pb == "deterministic":
-            log_pb = jnp.zeros_like(log_pf)
-        elif self.pb == "learnable":
-            raise NotImplementedError()  # TODO
-        else:
-            raise ValueError("Invalid pb choice.")
 
         # log_pb = jnp.where(
         #     samples["dones"],
@@ -215,16 +223,36 @@ class DAGGFlowNet:
 
         value_energies = samples["value_energies"]
         fetg_tp1_done = samples["next_observed"].all(axis=-1)
+        fetg_t_done = samples["observed"].all(axis=-1)
         log_fetg_tp1 = jnp.where(fetg_tp1_done, 0, log_fetg_tp1)
-        unfiltered_loss, logs = detailed_balance_loss_free_energy_to_go(
-            log_fetg_t=log_fetg_t,
-            log_fetg_tp1=log_fetg_tp1,
-            log_pf=log_pf,
-            log_pb=log_pb,
-            partial_energies=value_energies,
-            delta=self.delta,
-            reduction="none",
-        )
+        if self.loss_fn == "partial":
+            unfiltered_loss, logs = detailed_balance_loss_free_energy_to_go(
+                log_fetg_t=log_fetg_t,
+                log_fetg_tp1=log_fetg_tp1,
+                log_pf=log_pf,
+                log_pb=log_pb,
+                partial_energies=value_energies,
+                delta=self.delta,
+                reduction="none",
+            )
+        elif self.loss_fn == "db":
+            terminating_transitions = fetg_tp1_done & (~fetg_t_done)
+            log_fetg_tp1 = jnp.where(
+                terminating_transitions,
+                jnp.squeeze(samples["cum_value_energies"], axis=-1),
+                log_fetg_tp1,
+            )  # Replacing the terminal states F(s') by the rewards
+
+            unfiltered_loss, logs = detailed_balance_loss(
+                log_fetg_t=log_fetg_t,
+                log_fetg_tp1=log_fetg_tp1,
+                log_pf=log_pf,
+                log_pb=log_pb,
+                delta=self.delta,
+                reduction="none",
+            )
+        else:
+            raise ValueError("Invalid loss choice")
 
         loss = jnp.where(
             samples["dones"].squeeze(axis=-1), 0, unfiltered_loss
@@ -243,7 +271,8 @@ class DAGGFlowNet:
         key, subkey1, forward_key = random.split(key, 3)
 
         # First get the clique policy
-        if self.pb == "uniform":
+
+        if self.pb in ["uniform", "stochastic_env"]:
 
             logits_clique = self.clique_model.apply(
                 params.clique_model,
@@ -278,11 +307,6 @@ class DAGGFlowNet:
             clique_actions = jax.random.categorical(
                 subkey1, log_probs_clique / 999
             )  # a single integer between 0 and h_dim
-
-        elif self.pb == "learnable":
-            raise NotImplementedError()
-        else:
-            raise ValueError("Invalid pb choice")
 
         # Get uniform policy
         # log_uniform = uniform_log_policy(masks)
@@ -420,7 +444,7 @@ class DAGGFlowNet:
         # Initialize the models
         key1, key2 = random.split(key, 2)
 
-        if self.pb == "uniform":
+        if self.pb in ["stochastic_env", "uniform"]:
 
             clique_params = self.clique_model.init(
                 key1,
@@ -440,11 +464,6 @@ class DAGGFlowNet:
             clique_params = self.clique_model.init(
                 key1, graph, mask, x_dim, K, sampling_method=2
             )
-
-        elif self.pb == "learnable":
-            raise NotImplementedError()
-        else:
-            raise ValueError("Invalid pb choice")
 
         value_params = self.value_model.init(
             key2,

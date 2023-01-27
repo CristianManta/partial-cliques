@@ -78,12 +78,15 @@ class DAGGFlowNet:
         self.full_cliques = full_cliques
         self.loss_fn = loss
 
-        if self.pb == "uniform":
+        if self.pb == "stochastic_env":
             clique_model = random_clique_policy
             self.clique_model = hk.transform(clique_model)
         elif self.pb == "deterministic":
             clique_model = clique_policy
             self.clique_model = hk.without_apply_rng(hk.transform(clique_model))
+        elif self.pb == "uniform":
+            clique_model = clique_policy_transformer
+            self.clique_model = hk.transform(clique_model)
 
         value_model = value_policy_transformer
 
@@ -125,11 +128,30 @@ class DAGGFlowNet:
             dropout_rate=self.dropout_rate,
         )
 
-        if self.pb == "uniform":
+        if self.pb == "stochastic_env":
             log_pf_clique = jnp.zeros((bsz,))
 
         elif self.pb == "deterministic":
             log_pf_clique = jnp.zeros((bsz,))
+
+        elif self.pb == "uniform":
+            logits_clique = self.clique_model.apply(
+                params.clique_model,
+                forward_key_clique,
+                samples["values"],
+                samples["mask"],
+                x_dim,
+                K,
+                embed_dim=self.embed_dim,
+                num_heads=self.num_heads,
+                num_layers=self.num_layers,
+                key_size=self.key_size,
+                dropout_rate=self.dropout_rate,
+            )
+
+            log_pf_clique = nn.log_softmax(logits_clique)[
+                jnp.arange(bsz), samples["actions"][:, 0]
+            ]
 
         log_pf_value = nn.log_softmax(logits_value)[
             jnp.arange(bsz), samples["actions"][:, 1]
@@ -137,15 +159,32 @@ class DAGGFlowNet:
 
         log_pf = log_pf_value + log_pf_clique
 
-        if self.pb == "uniform":
+        if self.pb == "stochastic_env":
             log_pb = jnp.zeros_like(log_pf)
 
         elif self.pb == "deterministic":
             log_pb = jnp.zeros_like(log_pf)
-        elif self.pb == "learnable":
-            raise NotImplementedError()  # TODO
-        else:
-            raise ValueError("Invalid pb choice.")
+
+        elif self.pb == "uniform":
+            log_pb = jnp.zeros_like(log_pf)
+            for i in range(bsz):
+                num_next_observed_latent_vars = np.sum(
+                    samples["next_observed"][i][: self.h_dim]
+                )
+                incomplete_clique = find_incomplete_clique(
+                    samples["next_observed"][i], self.h_dim, False
+                )
+                if not incomplete_clique:
+                    log_pb = log_pb.at[i].set(-jnp.log(num_next_observed_latent_vars))
+                else:
+                    observed_latent_vars = set(
+                        np.nonzero(samples["next_observed"][i][: self.h_dim])[0]
+                    )
+                    observed_in_incomplete_clique = observed_latent_vars.intersection(
+                        incomplete_clique
+                    )
+                    num_active_vars = len(observed_in_incomplete_clique)
+                    log_pb = log_pb.at[i].set(-jnp.log(num_active_vars))
 
         # log_pb = jnp.where(
         #     samples["dones"],
@@ -232,7 +271,8 @@ class DAGGFlowNet:
         key, subkey1, forward_key = random.split(key, 3)
 
         # First get the clique policy
-        if self.pb == "uniform":
+
+        if self.pb in ["uniform", "stochastic_env"]:
 
             logits_clique = self.clique_model.apply(
                 params.clique_model,
@@ -267,11 +307,6 @@ class DAGGFlowNet:
             clique_actions = jax.random.categorical(
                 subkey1, log_probs_clique / 999
             )  # a single integer between 0 and h_dim
-
-        elif self.pb == "learnable":
-            raise NotImplementedError()
-        else:
-            raise ValueError("Invalid pb choice")
 
         # Get uniform policy
         # log_uniform = uniform_log_policy(masks)
@@ -409,7 +444,7 @@ class DAGGFlowNet:
         # Initialize the models
         key1, key2 = random.split(key, 2)
 
-        if self.pb == "uniform":
+        if self.pb in ["stochastic_env", "uniform"]:
 
             clique_params = self.clique_model.init(
                 key1,
@@ -429,11 +464,6 @@ class DAGGFlowNet:
             clique_params = self.clique_model.init(
                 key1, graph, mask, x_dim, K, sampling_method=2
             )
-
-        elif self.pb == "learnable":
-            raise NotImplementedError()
-        else:
-            raise ValueError("Invalid pb choice")
 
         value_params = self.value_model.init(
             key2,

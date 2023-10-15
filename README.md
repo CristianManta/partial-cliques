@@ -1,6 +1,6 @@
 # partial-cliques
 
-[Installation](#installation) - [Example](#example)
+[Installation](#installation) - [Example](#example) - [Report](/ift6269_final_project.pdf)
 
 
 ## Installation
